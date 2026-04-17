@@ -23,9 +23,12 @@ RUNTIME_ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", F
 
 
 def resolve_runtime_path(relative_path):
-    external_path = RUNTIME_ROOT / relative_path
-    internal_path = BASE_DIR / relative_path
-    return external_path if external_path.exists() else internal_path
+    try:
+        external_path = RUNTIME_ROOT / relative_path
+        internal_path = BASE_DIR / relative_path
+        return external_path if external_path.exists() else internal_path
+    except Exception:
+        return BASE_DIR / relative_path
 
 
 LOGO_PATH = resolve_runtime_path(Path("assets") / "logo.png")
@@ -716,12 +719,33 @@ def render_quick_card(title, copy):
 
 def load_auth_config():
     if not AUTH_USERS_PATH.exists():
-        raise FileNotFoundError(
-            f"Brakuje pliku konfiguracyjnego uzytkownikow: {AUTH_USERS_PATH}"
-        )
-    with AUTH_USERS_PATH.open("r", encoding="utf-8") as file:
-        payload = json.load(file)
-    return payload.get("users", [])
+        # Default user for Streamlit Cloud deployment
+        return [
+            {
+                "username": "admin",
+                "display_name": "Administrator",
+                "role": "Admin",
+                "active": True,
+                "salt": "c6b02c39a66d2460b6a3a3885b467ad0",
+                "password_hash": "f951c24eead1d41496fc80c791f5ac802af477002998494b058dde362f1e2dda"
+            }
+        ]
+    try:
+        with AUTH_USERS_PATH.open("r", encoding="utf-8") as file:
+            payload = json.load(file)
+        return payload.get("users", [])
+    except Exception:
+        # Return default user if JSON is corrupted
+        return [
+            {
+                "username": "admin",
+                "display_name": "Administrator",
+                "role": "Admin",
+                "active": True,
+                "salt": "c6b02c39a66d2460b6a3a3885b467ad0",
+                "password_hash": "f951c24eead1d41496fc80c791f5ac802af477002998494b058dde362f1e2dda"
+            }
+        ]
 
 
 def verify_password(password, salt_hex, password_hash_hex):
