@@ -7,9 +7,15 @@ textColor = "#F5F7FB"
 font = "sans serif"
 
 [server]
-headless = false
-runOnSave = true
+headless = true
+runOnSave = false
 maxUploadSize = 300
+enableXsrfProtection = true
+enableCORS = false
 
 [browser]
 gatherUsageStats = false
+serverAddress = "localhost"
+
+[logger]
+level = "error"
