@@ -1,0 +1,12 @@
+{
+  "users": [
+    {
+      "username": "Admin",
+      "display_name": "Administrator",
+      "role": "Admin",
+      "active": true,
+      "salt": "c6b02c39a66d2460b6a3a3885b467ad0",
+      "password_hash": "f951c24eead1d41496fc80c791f5ac802af477002998494b058dde362f1e2dda"
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+.venv/
+project/.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.log
+*.tmp
+*.bak
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+build/
+dist/
+*.spec
+*.exe
+*.dll
+*.pdb
+*.egg-info/
+.venv*
+.env
+.env.*
+secrets.toml
+*.db
+*.sqlite3
+
+# Streamlit cache and local browser state
+.cache/
+*/.streamlit/*.db
+
+# OS files
+desktop.ini

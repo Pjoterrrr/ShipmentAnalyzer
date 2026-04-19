@@ -904,25 +904,41 @@ def apply_chart_theme(chart):
         chart.configure_view(strokeOpacity=0)
         .configure(background="transparent")
         .configure_axis(
-            gridColor="#243244",
-            domainColor="#1b2635",
-            tickColor="#243244",
-            labelColor="#9fb0c9",
-            titleColor="#eef4ff",
+            grid=False,
+            domainColor="#384d6d",
+            tickColor="#607a9e",
+            labelColor="#e7f0ff",
+            titleColor="#f4fbff",
             labelFontSize=12,
             titleFontSize=13,
-            gridDash=[2, 4],
-            labelPadding=8,
-            titlePadding=14,
+            tickSize=6,
+            labelPadding=10,
+            titlePadding=12,
+        )
+        .configure_axisX(
+            grid=True,
+            gridColor="#1f2f46",
+            gridDash=[3, 5],
+            domain=False,
+            tickColor="#728ab5",
+            labelColor="#c8d6e8",
+        )
+        .configure_axisY(
+            grid=True,
+            gridColor="#1f2f46",
+            gridDash=[3, 5],
+            domain=False,
+            tickColor="#728ab5",
+            labelColor="#c8d6e8",
         )
         .configure_legend(
-            labelColor="#b5c0d4",
-            titleColor="#eef4ff",
+            labelColor="#c8d6e8",
+            titleColor="#f4fbff",
             labelFontSize=12,
             titleFontSize=13,
             symbolType="circle",
         )
-        .configure_title(color="#eef4ff", fontSize=16, fontWeight="bold", anchor="start")
+        .configure_title(color="#f4fbff", fontSize=16, fontWeight="bold", anchor="start")
     )
 
 
@@ -1077,7 +1093,7 @@ def build_quantity_chart(date_summary, x_title):
 
     prev_line = (
         alt.Chart(chart_data)
-        .mark_line(strokeWidth=2.2, interpolate="monotone", color="#8f9caf", strokeDash=[5, 4])
+        .mark_line(strokeWidth=2.6, interpolate="monotone", color="#6f8ed1", opacity=0.9)
         .encode(
             x=alt.X("Analysis Date:T", title=x_title, axis=alt.Axis(labelAngle=-24, labelLimit=140)),
             y=alt.Y("Quantity_Prev:Q", title="Ilość otwarta"),
@@ -1089,7 +1105,7 @@ def build_quantity_chart(date_summary, x_title):
     )
     current_area = (
         alt.Chart(chart_data)
-        .mark_area(color="#6b89b6", opacity=0.12, interpolate="monotone")
+        .mark_area(color="#5092ff", opacity=0.18, interpolate="monotone")
         .encode(
             x=alt.X("Analysis Date:T", title=x_title, axis=alt.Axis(labelAngle=-24, labelLimit=140)),
             y=alt.Y("Quantity_Curr:Q", title="Ilość otwarta"),
@@ -1098,10 +1114,10 @@ def build_quantity_chart(date_summary, x_title):
     current_line = (
         alt.Chart(chart_data)
         .mark_line(
-            point=alt.OverlayMarkDef(size=72, filled=True, fill="#0f1722", stroke="#7f93b1", strokeWidth=1.8),
-            strokeWidth=3.0,
+            point=alt.OverlayMarkDef(size=90, filled=True, fill="#eef4ff", stroke="#3c78d8", strokeWidth=2.2),
+            strokeWidth=3.6,
             interpolate="monotone",
-            color="#7f93b1",
+            color="#6cb0ff",
         )
         .encode(
             x=alt.X("Analysis Date:T", title=x_title, axis=alt.Axis(labelAngle=-24, labelLimit=140)),
@@ -1122,12 +1138,12 @@ def build_quantity_chart(date_summary, x_title):
     current_label = (
         alt.Chart(latest_point)
         .mark_text(
-            align="right",
-            baseline="bottom",
-            dx=-8,
-            dy=-12,
+            align="left",
+            baseline="middle",
+            dx=12,
+            dy=-4,
             color="#eef4ff",
-            fontSize=12,
+            fontSize=13,
             fontWeight="bold",
         )
         .encode(x="Analysis Date:T", y="Quantity_Curr:Q", text="Current Label:N")
@@ -1135,12 +1151,12 @@ def build_quantity_chart(date_summary, x_title):
     previous_label = (
         alt.Chart(latest_point)
         .mark_text(
-            align="right",
-            baseline="top",
-            dx=-8,
-            dy=12,
-            color="#93a4bd",
-            fontSize=11,
+            align="left",
+            baseline="middle",
+            dx=12,
+            dy=14,
+            color="#b6c8dd",
+            fontSize=12,
             fontWeight="bold",
         )
         .encode(x="Analysis Date:T", y="Quantity_Prev:Q", text="Previous Label:N")
@@ -1813,6 +1829,8 @@ else:
         st.sidebar.header("Filtry")
         if logo_available():
             st.sidebar.image(str(LOGO_PATH), use_container_width=True)
+        
+        # Oś dat
         date_basis = st.sidebar.radio(
             "Oś dat",
             DATE_OPTIONS,
@@ -1820,6 +1838,35 @@ else:
             format_func=get_date_label,
         )
 
+        # Zakres dat (kalendarz)
+        available_dates = result[date_basis].dropna().sort_values()
+        min_date = available_dates.min().date()
+        max_date = available_dates.max().date()
+        
+        st.sidebar.markdown("---")
+        st.sidebar.markdown("##### 📅 Zakres czasowy")
+        selected_date_input = st.sidebar.date_input(
+            "Wybierz przedział dat:",
+            value=(min_date, max_date),
+            min_value=min_date,
+            max_value=max_date,
+            help="Kliknij, aby wybrać pojedynczy dzień lub zakres dat do analizy.",
+            label_visibility="collapsed",
+        )
+        selected_start_date, selected_end_date = normalize_date_selection(
+            selected_date_input, min_date, max_date
+        )
+        if selected_start_date > selected_end_date:
+            selected_start_date, selected_end_date = (
+                selected_end_date,
+                selected_start_date,
+            )
+        
+        # Wyświetl wybrany zakres
+        st.sidebar.caption(f"Zakres: {selected_start_date.strftime('%Y-%m-%d')} → {selected_end_date.strftime('%Y-%m-%d')}")
+        st.sidebar.markdown("---")
+
+        # Pozostałe filtry
         full_product_summary = summarize_products(result)
         all_products = full_product_summary["Product Label"].tolist()
         selected_products = st.sidebar.multiselect(
@@ -1835,25 +1882,6 @@ else:
             format_func=get_change_label,
         )
         only_alerts = st.sidebar.checkbox(f"Tylko alerty >= {THRESHOLD}%")
-
-        available_dates = result[date_basis].dropna().sort_values()
-        min_date = available_dates.min().date()
-        max_date = available_dates.max().date()
-        selected_date_input = st.date_input(
-            f"Kalendarz: {get_date_label(date_basis)}",
-            value=(min_date, max_date),
-            min_value=min_date,
-            max_value=max_date,
-            help="Wybierz jeden dzień albo zakres dat do analizy.",
-        )
-        selected_start_date, selected_end_date = normalize_date_selection(
-            selected_date_input, min_date, max_date
-        )
-        if selected_start_date > selected_end_date:
-            selected_start_date, selected_end_date = (
-                selected_end_date,
-                selected_start_date,
-            )
 
         filtered_df = result.copy()
         filtered_df = filtered_df[
