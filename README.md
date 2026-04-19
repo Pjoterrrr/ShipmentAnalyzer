@@ -1,16 +1,15 @@
 # Release Dashboard Online
 
-Profesjonalny dashboard Streamlit do porównywania dwóch plików Excel:
+Profesjonalna aplikacja Streamlit do porównywania dwóch plików Excel:
 
-- previous release / previous plan
-- current release / current plan
+- poprzedni release / poprzedni plan
+- aktualny release / aktualny plan
 
-Aplikacja zachowuje całą logikę analityczną:
+Aplikacja zachowuje logikę analityczną biznesową:
 
 - porównanie `previous` vs `current`
-- KPI
-- alerty przy `abs(Percent Change) >= 15`
-- trend, delta, change mix, raport produktu
+- KPI i alerty przy `abs(Percent Change) >= 15`
+- wykres trendu, delta, struktura zmian i raport produktu
 - macierz release'u
 - eksport CSV i Excel
 - logowanie użytkowników
@@ -26,58 +25,46 @@ Projekt jest przygotowany do:
 
 ```text
 .
-├── .streamlit/
-│   └── config.toml
-├── app.py
-├── release_dashboard_updated.py
-├── streamlit_app.py
-├── requirements.txt
-├── README.md
-├── .gitignore
-├── secrets_example.toml
-├── assets/
-│   └── .gitkeep
-└── config/
-    └── users.example.json
+|-- .streamlit/
+|   `-- config.toml
+|-- app.py
+|-- release_dashboard_updated.py
+|-- streamlit_app.py
+|-- requirements.txt
+|-- README.md
+|-- .gitignore
+|-- secrets_example.toml
+|-- assets/
+|   `-- .gitkeep
+`-- config/
+    `-- users.example.json
 ```
 
-## Entry point
+## Plik startowy
 
-Do deployu online rekomendowany jest:
+Do uruchamiania lokalnego i deployu na Streamlit Community Cloud rekomendowany jest:
 
 - `app.py`
 
-Działają też:
+Dodatkowo działają także:
 
 - `release_dashboard_updated.py`
 - `streamlit_app.py`
 
 ## Logowanie
 
-Aplikacja obsługuje dwa źródła logowania:
+Aplikacja wspiera dwa źródła logowania:
 
-1. `st.secrets` - preferowane dla Streamlit Community Cloud
-2. `config/users.json` - fallback lokalny
+1. `config/users.json` - preferowane lokalnie
+2. `st.secrets` - preferowane na Streamlit Community Cloud
 
-Jeżeli żadne źródło nie jest skonfigurowane, aplikacja nie crashuje, tylko pokazuje komunikat konfiguracyjny na ekranie logowania.
+Priorytet jest następujący:
 
-### Format użytkowników w `st.secrets`
+1. jeśli istnieje `config/users.json`, aplikacja używa pliku lokalnego
+2. jeśli nie ma pliku lokalnego, aplikacja sprawdza `st.secrets`
+3. jeśli nie ma żadnej konfiguracji, ekran logowania pokaże prosty komunikat konfiguracyjny
 
-Użyj pliku `secrets_example.toml` jako wzoru.
-
-Przykład:
-
-```toml
-[[auth.users]]
-username = "planner"
-display_name = "Planner"
-role = "Analyst"
-active = true
-salt = "REPLACE_WITH_HEX_SALT"
-password_hash = "REPLACE_WITH_HEX_PASSWORD_HASH"
-```
-
-### Format użytkowników lokalnych
+### Lokalny plik użytkowników
 
 Skopiuj:
 
@@ -104,9 +91,23 @@ Przykład:
 }
 ```
 
-### Jak wygenerować salt i hash hasła
+### Sekrety dla Streamlit Community Cloud
 
-Uruchom lokalnie:
+Użyj pliku `secrets_example.toml` jako wzoru.
+
+Przykład:
+
+```toml
+[[auth.users]]
+username = "planner"
+display_name = "Planner"
+role = "Analyst"
+active = true
+salt = "REPLACE_WITH_HEX_SALT"
+password_hash = "REPLACE_WITH_HEX_PASSWORD_HASH"
+```
+
+### Jak wygenerować `salt` i `password_hash`
 
 ```bash
 python -c "import os,binascii,hashlib,getpass; pwd=getpass.getpass('Password: '); salt=os.urandom(16); h=hashlib.pbkdf2_hmac('sha256', pwd.encode('utf-8'), salt, 120000); print('salt=' + binascii.hexlify(salt).decode()); print('password_hash=' + binascii.hexlify(h).decode())"
@@ -114,21 +115,20 @@ python -c "import os,binascii,hashlib,getpass; pwd=getpass.getpass('Password: ')
 
 Wygenerowane wartości wklej do:
 
-- `.streamlit/secrets.toml`
-albo
 - `config/users.json`
+albo
+- `.streamlit/secrets.toml`
 
 ## Logo
 
 Logo jest opcjonalne.
 
-Jeśli chcesz je pokazać:
+Jeśli chcesz je wyświetlać:
 
-1. dodaj plik:
-   - `assets/logo.png`
+1. dodaj plik `assets/logo.png`
 2. uruchom aplikację ponownie
 
-Jeżeli pliku nie ma, dashboard działa normalnie bez logo.
+Jeśli pliku nie ma, dashboard działa normalnie bez logo.
 
 ## Uruchomienie lokalne
 
@@ -141,8 +141,8 @@ pip install -r requirements.txt
 
 3. Skonfiguruj logowanie:
 
-- opcja A: skopiuj `secrets_example.toml` do `.streamlit/secrets.toml`
-- opcja B: skopiuj `config/users.example.json` do `config/users.json`
+- opcja A: utwórz `config/users.json` na podstawie `config/users.example.json`
+- opcja B: przygotuj `.streamlit/secrets.toml` na podstawie `secrets_example.toml`
 
 4. Opcjonalnie dodaj `assets/logo.png`
 
@@ -158,44 +158,43 @@ Alternatywnie:
 streamlit run release_dashboard_updated.py
 ```
 
-## Przygotowanie repozytorium GitHub
+## GitHub
 
-1. Załóż nowe repozytorium na GitHub.
-2. Skopiuj do niego wszystkie pliki projektu.
-3. Upewnij się, że nie commitujesz:
-   - `.streamlit/secrets.toml`
-   - `config/users.json`
-4. Zainicjalizuj repo lokalnie:
+Jeśli tworzysz nowe repozytorium:
 
 ```bash
 git init
 git add .
-git commit -m "Prepare Streamlit dashboard for Community Cloud deploy"
+git commit -m "Prepare Streamlit dashboard"
 git branch -M main
 git remote add origin https://github.com/TWOJ_LOGIN/TWOJE_REPO.git
 git push -u origin main
 ```
 
+Nie commituj:
+
+- `.streamlit/secrets.toml`
+- `config/users.json`
+
+Oba pliki są już ujęte w `.gitignore`.
+
 ## Deploy na Streamlit Community Cloud
 
-1. Wejdź na:
-   - `https://share.streamlit.io`
-2. Zaloguj się przez GitHub.
-3. Kliknij `Create app`.
-4. Wybierz repozytorium GitHub.
-5. Ustaw branch:
-   - `main`
-6. Ustaw plik startowy:
-   - `app.py`
-7. Otwórz `Advanced settings`.
-8. Wklej zawartość `secrets_example.toml` po podmianie `salt` i `password_hash` na prawdziwe wartości.
-9. Kliknij `Deploy`.
+1. Wejdź na `https://share.streamlit.io`
+2. Zaloguj się przez GitHub
+3. Kliknij `Create app`
+4. Wybierz repozytorium
+5. Ustaw branch `main`
+6. Ustaw plik startowy `app.py`
+7. Otwórz `Advanced settings`
+8. Wklej sekrety w formacie z `secrets_example.toml`
+9. Kliknij `Deploy`
 
 Po wdrożeniu aplikacja będzie dostępna pod publicznym linkiem `https://...streamlit.app`.
 
 ## Aktualizowanie aplikacji
 
-Po każdej zmianie w kodzie:
+Po każdej zmianie:
 
 ```bash
 git add .
@@ -203,19 +202,18 @@ git commit -m "Update dashboard"
 git push
 ```
 
-Community Cloud pobierze zmiany z GitHub i odświeży aplikację online.
+Streamlit Community Cloud pobierze zmiany z GitHub i odświeży aplikację.
 
-## Wskazówki deploymentowe
+## Wskazówki wdrożeniowe
 
-- trzymaj prawdziwe dane logowania wyłącznie w `st.secrets` lub lokalnym pliku ignorowanym przez Git
-- uruchamiaj lokalnie komendą z katalogu głównego repo
-- nie commituj żadnych plików z prawdziwymi hasłami
+- przechowuj prawdziwe dane logowania wyłącznie w `st.secrets` lub lokalnym pliku ignorowanym przez Git
+- uruchamiaj aplikację z katalogu głównego repozytorium
 - jeśli dodasz nowe biblioteki, zaktualizuj `requirements.txt`
 
 ## Szybka checklista
 
 1. `pip install -r requirements.txt`
-2. skonfiguruj użytkowników w `.streamlit/secrets.toml` lub `config/users.json`
+2. skonfiguruj użytkowników w `config/users.json` lub `.streamlit/secrets.toml`
 3. `streamlit run app.py`
 4. wrzuć repo na GitHub
 5. podłącz repo do Streamlit Community Cloud
