@@ -1,0 +1,12 @@
+{
+  "users": [
+    {
+      "username": "planner",
+      "display_name": "Planner",
+      "role": "Analyst",
+      "active": true,
+      "salt": "REPLACE_WITH_HEX_SALT",
+      "password_hash": "REPLACE_WITH_HEX_PASSWORD_HASH"
+    }
+  ]
+}

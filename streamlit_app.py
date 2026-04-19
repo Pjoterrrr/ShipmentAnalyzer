@@ -1,4 +1,4 @@
-import base64
+﻿import base64
 import binascii
 import hashlib
 import html
@@ -48,7 +48,7 @@ REQUIRED_RAW_COLUMNS = [
 DATE_OPTIONS = ["Receipt Date", "Ship Date"]
 DATE_LABELS = {
     "Receipt Date": "Data odbioru",
-    "Ship Date": "Data wysyłki",
+    "Ship Date": "Data wysyĹ‚ki",
 }
 CHANGE_DIRECTION_LABELS = {
     "Increase": "Wzrost",
@@ -56,15 +56,15 @@ CHANGE_DIRECTION_LABELS = {
     "No Change": "Bez zmian",
 }
 MATRIX_METRIC_LABELS = {
-    "Current Quantity": "Aktualna ilość",
-    "Previous Quantity": "Poprzednia ilość",
-    "Delta": "Zmiana ilości",
+    "Current Quantity": "Aktualna iloĹ›Ä‡",
+    "Previous Quantity": "Poprzednia iloĹ›Ä‡",
+    "Delta": "Zmiana iloĹ›ci",
     "Percent Change": "Zmiana procentowa",
 }
 
 
 st.set_page_config(
-    page_title="Pjoter Development | Analiza zamówień i wysyłek",
+    page_title="Pjoter Development | Analiza zamĂłwieĹ„ i wysyĹ‚ek",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -428,6 +428,43 @@ st.markdown(
         line-height: 1.6;
         color: var(--ink);
     }
+    .context-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 0.85rem;
+        margin: 0.45rem 0 1.1rem 0;
+    }
+    .context-item {
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        padding: 0.95rem 1rem;
+        background:
+            radial-gradient(circle at top right, rgba(76, 201, 240, 0.08), transparent 32%),
+            linear-gradient(180deg, rgba(15, 21, 32, 0.98), rgba(10, 15, 24, 0.95));
+        box-shadow: var(--shadow-md);
+        min-height: 128px;
+    }
+    .context-item-label {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.13em;
+        color: var(--muted);
+        font-weight: 800;
+        margin-bottom: 0.4rem;
+    }
+    .context-item-value {
+        color: var(--ink);
+        font-size: 1.14rem;
+        font-weight: 800;
+        line-height: 1.18;
+        letter-spacing: -0.02em;
+        margin-bottom: 0.45rem;
+    }
+    .context-item-copy {
+        color: var(--slate);
+        font-size: 0.84rem;
+        line-height: 1.55;
+    }
     .pill-row {
         display: flex;
         flex-wrap: wrap;
@@ -508,6 +545,9 @@ st.markdown(
     .section-banner {
         margin: 0.25rem 0 0.95rem 0;
     }
+    .section-shell {
+        margin: 0.45rem 0 0.95rem 0;
+    }
     .section-kicker {
         font-size: 0.75rem;
         text-transform: uppercase;
@@ -516,10 +556,103 @@ st.markdown(
         font-weight: 800;
         margin-bottom: 0.25rem;
     }
+    .section-title {
+        color: var(--ink);
+        font-size: 1.55rem;
+        line-height: 1.08;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        margin-bottom: 0.35rem;
+    }
     .section-copy {
         color: var(--slate);
         font-size: 0.96rem;
         line-height: 1.72;
+    }
+    .kpi-card {
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        padding: 1rem 1.05rem;
+        background:
+            radial-gradient(circle at top right, rgba(76, 201, 240, 0.08), transparent 34%),
+            linear-gradient(180deg, rgba(15, 21, 32, 0.98), rgba(10, 15, 24, 0.95));
+        min-height: 166px;
+        box-shadow: var(--shadow-md);
+    }
+    .kpi-label {
+        font-size: 0.76rem;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: var(--muted);
+        font-weight: 800;
+        margin-bottom: 0.6rem;
+    }
+    .kpi-value {
+        color: var(--ink);
+        font-size: 2rem;
+        line-height: 0.95;
+        font-weight: 800;
+        letter-spacing: -0.05em;
+        margin-bottom: 0.7rem;
+    }
+    .kpi-meta {
+        color: var(--slate);
+        font-size: 0.84rem;
+        line-height: 1.55;
+    }
+    .kpi-positive .kpi-value {
+        color: var(--mint);
+    }
+    .kpi-negative .kpi-value {
+        color: var(--rose);
+    }
+    .kpi-alert .kpi-value {
+        color: #ff8b8b;
+    }
+    .sidebar-section {
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        padding: 0.95rem 1rem;
+        background: rgba(15, 21, 32, 0.88);
+        box-shadow: var(--shadow-md);
+        margin: 0.3rem 0 0.8rem 0;
+    }
+    .sidebar-section-kicker {
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        font-size: 0.7rem;
+        font-weight: 800;
+        margin-bottom: 0.25rem;
+    }
+    .sidebar-section-title {
+        color: var(--ink);
+        font-size: 1rem;
+        font-weight: 800;
+        margin-bottom: 0.28rem;
+    }
+    .sidebar-section-copy {
+        color: var(--slate);
+        font-size: 0.82rem;
+        line-height: 1.55;
+    }
+    .empty-state {
+        border: 1px dashed rgba(125, 211, 252, 0.28);
+        border-radius: 24px;
+        padding: 1.25rem 1.3rem;
+        background: rgba(10, 17, 26, 0.8);
+        margin: 0.8rem 0 0.4rem 0;
+    }
+    .empty-state-title {
+        color: var(--ink);
+        font-size: 1.1rem;
+        font-weight: 800;
+        margin-bottom: 0.35rem;
+    }
+    .empty-state-copy {
+        color: var(--slate);
+        font-size: 0.9rem;
+        line-height: 1.6;
     }
     [data-testid="stMarkdownContainer"] p {
         color: var(--slate);
@@ -598,6 +731,9 @@ st.markdown(
         .hero-stat-grid {
             grid-template-columns: 1fr;
         }
+        .context-grid {
+            grid-template-columns: 1fr;
+        }
         .login-grid {
             grid-template-columns: 1fr;
         }
@@ -611,8 +747,8 @@ st.markdown(
     <div class="section-banner">
         <div class="section-kicker">Premium Release Intelligence</div>
         <div class="section-copy">
-            Prześlij poprzedni i aktualny release. Dashboard porówna zamówienia po dacie wysyłki
-            lub odbioru, pokaże wzrosty, spadki, alerty oraz gotowy raport do dalszej pracy.
+            PrzeĹ›lij poprzedni i aktualny release. Dashboard porĂłwna zamĂłwienia po dacie wysyĹ‚ki
+            lub odbioru, pokaĹĽe wzrosty, spadki, alerty oraz gotowy raport do dalszej pracy.
         </div>
     </div>
     """,
@@ -717,43 +853,489 @@ def render_quick_card(title, copy):
     )
 
 
+def format_number(value):
+    return f"{float(value):,.0f}"
+
+
+def safe_ratio(numerator, denominator):
+    denominator = float(denominator)
+    if denominator == 0:
+        return 0.0
+    return float(numerator) / denominator
+
+
+def format_period_label(start_date, end_date):
+    if start_date == end_date:
+        return start_date.strftime("%Y-%m-%d")
+    return f"{start_date:%Y-%m-%d} -> {end_date:%Y-%m-%d}"
+
+
+def compute_dashboard_metrics(dataframe, product_summary):
+    if dataframe.empty:
+        return {
+            "total_prev": 0.0,
+            "total_curr": 0.0,
+            "total_delta": 0.0,
+            "alert_count": 0,
+            "alert_ratio": 0.0,
+            "products_changed": 0,
+            "products_in_scope": 0,
+            "rows": 0,
+            "new_positions": 0,
+            "new_products": 0,
+            "removed_positions": 0,
+            "removed_products": 0,
+        }
+
+    new_positions = dataframe[
+        (dataframe["Quantity_Prev"] == 0) & (dataframe["Quantity_Curr"] > 0)
+    ]
+    removed_positions = dataframe[
+        (dataframe["Quantity_Prev"] > 0) & (dataframe["Quantity_Curr"] == 0)
+    ]
+    alert_count = int(dataframe["Alert"].sum())
+
+    return {
+        "total_prev": float(dataframe["Quantity_Prev"].sum()),
+        "total_curr": float(dataframe["Quantity_Curr"].sum()),
+        "total_delta": float(dataframe["Delta"].sum()),
+        "alert_count": alert_count,
+        "alert_ratio": safe_ratio(alert_count, len(dataframe)),
+        "products_changed": int(product_summary.loc[product_summary["Delta"] != 0, "Product Label"].nunique()),
+        "products_in_scope": int(product_summary["Product Label"].nunique()),
+        "rows": int(len(dataframe)),
+        "new_positions": int(len(new_positions)),
+        "new_products": int(new_positions["Product Label"].nunique()),
+        "removed_positions": int(len(removed_positions)),
+        "removed_products": int(removed_positions["Product Label"].nunique()),
+    }
+
+
+def build_top_alert_products(product_summary, limit=10):
+    if product_summary.empty:
+        return product_summary.head(0).copy()
+    return (
+        product_summary.sort_values(
+            ["Alert_Count", "Abs_Delta", "Delta", "Quantity_Curr"],
+            ascending=[False, False, False, False],
+        )
+        .head(limit)
+        .copy()
+    )
+
+
+def prepare_top_alert_products_table(product_summary, limit=10):
+    top_alerts = build_top_alert_products(product_summary, limit=limit)
+    if top_alerts.empty:
+        return pd.DataFrame(
+            columns=[
+                "Part Number",
+                "Part Description",
+                "Alert Count",
+                "Delta",
+                "Quantity Prev",
+                "Quantity Curr",
+            ]
+        )
+
+    table = top_alerts[
+        [
+            "Part Number",
+            "Part Description",
+            "Alert_Count",
+            "Delta",
+            "Quantity_Prev",
+            "Quantity_Curr",
+        ]
+    ].copy()
+    table["Alert_Count"] = table["Alert_Count"].astype(int)
+    table["Delta"] = table["Delta"].map(format_signed_int)
+    table["Quantity_Prev"] = table["Quantity_Prev"].map(format_number)
+    table["Quantity_Curr"] = table["Quantity_Curr"].map(format_number)
+    return table.rename(
+        columns={
+            "Part Number": "Part Number",
+            "Part Description": "Part Description",
+            "Alert_Count": "Alert Count",
+            "Delta": "Delta",
+            "Quantity_Prev": "Quantity Prev",
+            "Quantity_Curr": "Quantity Curr",
+        }
+    )
+
+
+def prepare_highlight_table(product_summary, limit=10):
+    if product_summary.empty:
+        return pd.DataFrame(
+            columns=[
+                "Part Number",
+                "Part Description",
+                "Quantity Prev",
+                "Quantity Curr",
+                "Delta",
+                "Alert Count",
+                "Change Direction",
+            ]
+        )
+
+    highlight_table = (
+        product_summary.assign(Abs_Delta=product_summary["Delta"].abs())
+        .sort_values(["Abs_Delta", "Alert_Count"], ascending=[False, False])
+        .drop(columns=["Abs_Delta"])
+        .head(limit)
+        .copy()
+    )
+    highlight_table["Quantity_Prev"] = highlight_table["Quantity_Prev"].map(format_number)
+    highlight_table["Quantity_Curr"] = highlight_table["Quantity_Curr"].map(format_number)
+    highlight_table["Delta"] = highlight_table["Delta"].map(format_signed_int)
+    highlight_table["Change Direction"] = highlight_table["Change Direction"].map(
+        get_change_label
+    )
+    return highlight_table.rename(
+        columns={
+            "Part Number": "Part Number",
+            "Part Description": "Part Description",
+            "Quantity_Prev": "Quantity Prev",
+            "Quantity_Curr": "Quantity Curr",
+            "Delta": "Delta",
+            "Alert_Count": "Alert Count",
+            "Change Direction": "Change Direction",
+        }
+    )
+
+
+def prepare_product_detail_table(product_detail):
+    product_table = product_detail[
+        [
+            "Part Number",
+            "Part Description",
+            "Ship Date",
+            "Receipt Date",
+            "Quantity_Prev",
+            "Quantity_Curr",
+            "Delta",
+            "Percent Change",
+            "Change Direction",
+            "Alert",
+        ]
+    ].copy()
+    product_table["Ship Date"] = product_table["Ship Date"].dt.strftime("%Y-%m-%d")
+    product_table["Receipt Date"] = product_table["Receipt Date"].dt.strftime("%Y-%m-%d")
+    product_table["Quantity_Prev"] = product_table["Quantity_Prev"].map(format_number)
+    product_table["Quantity_Curr"] = product_table["Quantity_Curr"].map(format_number)
+    product_table["Delta"] = product_table["Delta"].map(format_signed_int)
+    product_table["Percent Change"] = product_table["Percent Change"].map(format_signed_pct)
+    product_table["Change Direction"] = product_table["Change Direction"].map(get_change_label)
+    product_table["Alert"] = product_table["Alert"].map(lambda value: "Tak" if value else "Nie")
+    return product_table.rename(
+        columns={
+            "Part Number": "Numer czÄ™Ĺ›ci",
+            "Part Description": "Opis produktu",
+            "Ship Date": "Data wysyĹ‚ki",
+            "Receipt Date": "Data odbioru",
+            "Quantity_Prev": "Poprzednia iloĹ›Ä‡",
+            "Quantity_Curr": "Aktualna iloĹ›Ä‡",
+            "Delta": "Bilans zmian",
+            "Percent Change": "Zmiana %",
+            "Change Direction": "Kierunek zmiany",
+            "Alert": "Alert",
+        }
+    )
+
+
+def prepare_detail_table(filtered_df):
+    detail_table = filtered_df[
+        [
+            "PO Number",
+            "Part Number",
+            "Part Description",
+            "Ship Date",
+            "Receipt Date",
+            "Unit of Measure",
+            "Quantity_Prev",
+            "Quantity_Curr",
+            "Delta",
+            "Percent Change",
+            "Change Direction",
+            "Alert",
+        ]
+    ].copy()
+    detail_table["Ship Date"] = detail_table["Ship Date"].dt.strftime("%Y-%m-%d")
+    detail_table["Receipt Date"] = detail_table["Receipt Date"].dt.strftime("%Y-%m-%d")
+    detail_table["Quantity_Prev"] = detail_table["Quantity_Prev"].map(format_number)
+    detail_table["Quantity_Curr"] = detail_table["Quantity_Curr"].map(format_number)
+    detail_table["Delta"] = detail_table["Delta"].map(format_signed_int)
+    detail_table["Percent Change"] = detail_table["Percent Change"].map(format_signed_pct)
+    detail_table["Change Direction"] = detail_table["Change Direction"].map(get_change_label)
+    detail_table["Alert"] = detail_table["Alert"].map(lambda value: "Tak" if value else "Nie")
+    return detail_table.rename(
+        columns={
+            "PO Number": "Numer PO",
+            "Part Number": "Numer czÄ™Ĺ›ci",
+            "Part Description": "Opis produktu",
+            "Ship Date": "Data wysyĹ‚ki",
+            "Receipt Date": "Data odbioru",
+            "Unit of Measure": "JM",
+            "Quantity_Prev": "Poprzednia iloĹ›Ä‡",
+            "Quantity_Curr": "Aktualna iloĹ›Ä‡",
+            "Delta": "Bilans zmian",
+            "Percent Change": "Zmiana %",
+            "Change Direction": "Kierunek zmiany",
+            "Alert": "Alert",
+        }
+    )
+
+
+def build_context_items(
+    prev_meta,
+    curr_meta,
+    date_basis,
+    selected_start_date,
+    selected_end_date,
+    selected_products_count,
+    total_products,
+):
+    return [
+        {
+            "label": "PO Number",
+            "value": curr_meta["po_number"],
+            "copy": "Analizowane zamĂłwienie",
+        },
+        {
+            "label": "Previous Release",
+            "value": f"v{prev_meta['release_version']}",
+            "copy": format_date(prev_meta["release_date"]),
+        },
+        {
+            "label": "Current Release",
+            "value": f"v{curr_meta['release_version']}",
+            "copy": format_date(curr_meta["release_date"]),
+        },
+        {
+            "label": "Planner",
+            "value": curr_meta["planner_name"],
+            "copy": curr_meta["planner_email"],
+        },
+        {
+            "label": "Date Basis",
+            "value": get_date_label(date_basis),
+            "copy": format_period_label(selected_start_date, selected_end_date),
+        },
+        {
+            "label": "Product Scope",
+            "value": f"{selected_products_count}/{total_products}",
+            "copy": "aktywnych produktĂłw",
+        },
+    ]
+
+
+def render_section_header(kicker, title, copy):
+    st.markdown(
+        f"""
+        <div class="section-shell">
+            <div class="section-kicker">{html.escape(str(kicker))}</div>
+            <div class="section-title">{html.escape(str(title))}</div>
+            <div class="section-copy">{html.escape(str(copy))}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_sidebar_section(kicker, title, copy):
+    st.sidebar.markdown(
+        f"""
+        <div class="sidebar-section">
+            <div class="sidebar-section-kicker">{html.escape(str(kicker))}</div>
+            <div class="sidebar-section-title">{html.escape(str(title))}</div>
+            <div class="sidebar-section-copy">{html.escape(str(copy))}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_context_bar(items):
+    cards = []
+    for item in items:
+        cards.append(
+            f"""
+            <div class="context-item">
+                <div class="context-item-label">{html.escape(str(item['label']))}</div>
+                <div class="context-item-value">{html.escape(str(item['value']))}</div>
+                <div class="context-item-copy">{html.escape(str(item['copy']))}</div>
+            </div>
+            """
+        )
+    st.markdown(
+        f'<div class="context-grid">{"".join(cards)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_kpi_card(label, value, meta, tone="neutral"):
+    st.markdown(
+        f"""
+        <div class="kpi-card kpi-{html.escape(str(tone))}">
+            <div class="kpi-label">{html.escape(str(label))}</div>
+            <div class="kpi-value">{html.escape(str(value))}</div>
+            <div class="kpi-meta">{html.escape(str(meta))}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_empty_filtered_state():
+    st.markdown(
+        """
+        <div class="empty-state">
+            <div class="empty-state-title">Brak danych po zastosowaniu filtrĂłw</div>
+            <div class="empty-state-copy">
+                Poszerz zakres dat, przywrĂłÄ‡ produkty albo wyĹ‚Ä…cz filtr alertĂłw, aby wrĂłciÄ‡ do peĹ‚nego obrazu zmian.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_dashboard_hero(prev_meta, curr_meta, date_basis, selected_start_date, selected_end_date, metrics):
+    hero_left, hero_right = st.columns([1.6, 1], gap="large")
+    with hero_left:
+        hero_logo_html = (
+            f'<img class="hero-logo" src="{logo_data_uri()}" alt="{BRAND_NAME} logo" />'
+            if logo_available()
+            else f'<div class="brand-badge">{BRAND_NAME}</div>'
+        )
+        st.markdown(
+            f"""
+            <div class="hero-card">
+                {hero_logo_html}
+                <div class="hero-kicker">Enterprise Release Intelligence</div>
+                <div class="hero-title">Dashboard zmian dla PO {html.escape(str(curr_meta['po_number']))}</div>
+                <p class="hero-copy">
+                    PorĂłwnanie previous vs current release w ukĹ‚adzie premium analytics workspace:
+                    od kontekstu biznesowego, przez KPI i insighty, aĹĽ do drill-downu po produkcie,
+                    macierzy release'u oraz danych szczegĂłĹ‚owych.
+                </p>
+                <div class="hero-stat-grid">
+                    <div class="hero-stat">
+                        <div class="hero-stat-label">Previous file</div>
+                        <div class="hero-stat-value">{html.escape(str(prev_meta['file_name']))}</div>
+                    </div>
+                    <div class="hero-stat">
+                        <div class="hero-stat-label">Current file</div>
+                        <div class="hero-stat-value">{html.escape(str(curr_meta['file_name']))}</div>
+                    </div>
+                    <div class="hero-stat">
+                        <div class="hero-stat-label">Previous release</div>
+                        <div class="hero-stat-value">v{html.escape(str(prev_meta['release_version']))}</div>
+                    </div>
+                    <div class="hero-stat">
+                        <div class="hero-stat-label">Current release</div>
+                        <div class="hero-stat-value">v{html.escape(str(curr_meta['release_version']))}</div>
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with hero_right:
+        st.markdown(
+            f"""
+            <div class="hero-card">
+                <div class="hero-kicker">Active Analysis Window</div>
+                <div class="hero-title">{html.escape(format_period_label(selected_start_date, selected_end_date))}</div>
+                <p class="hero-copy">
+                    OĹ› dat: <strong>{html.escape(get_date_label(date_basis))}</strong><br>
+                    Planista: <strong>{html.escape(str(curr_meta['planner_name']))}</strong><br>
+                    Kontakt: <strong>{html.escape(str(curr_meta['planner_email']))}</strong>
+                </p>
+                <div class="hero-stat-grid">
+                    <div class="hero-stat">
+                        <div class="hero-stat-label">Rows in scope</div>
+                        <div class="hero-stat-value">{metrics['rows']:,}</div>
+                    </div>
+                    <div class="hero-stat">
+                        <div class="hero-stat-label">Products in scope</div>
+                        <div class="hero-stat-value">{metrics['products_in_scope']:,}</div>
+                    </div>
+                    <div class="hero-stat">
+                        <div class="hero-stat-label">Alerts</div>
+                        <div class="hero-stat-value">{metrics['alert_count']:,}</div>
+                    </div>
+                    <div class="hero-stat">
+                        <div class="hero-stat-label">Net delta</div>
+                        <div class="hero-stat-value">{format_signed_int(metrics['total_delta'])}</div>
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+def normalize_auth_users(raw_users):
+    normalized = []
+    for raw_user in raw_users or []:
+        if not isinstance(raw_user, dict):
+            continue
+
+        username = str(raw_user.get("username", "")).strip()
+        salt = str(raw_user.get("salt", "")).strip()
+        password_hash = str(raw_user.get("password_hash", "")).strip()
+        if not username or not salt or not password_hash:
+            continue
+
+        normalized.append(
+            {
+                "username": username,
+                "display_name": str(raw_user.get("display_name", username)).strip() or username,
+                "role": str(raw_user.get("role", "User")).strip() or "User",
+                "active": bool(raw_user.get("active", True)),
+                "salt": salt,
+                "password_hash": password_hash,
+            }
+        )
+    return normalized
+
+
 def load_auth_config():
-    if not AUTH_USERS_PATH.exists():
-        # Default user for Streamlit Cloud deployment
-        return [
-            {
-                "username": "admin",
-                "display_name": "Administrator",
-                "role": "Admin",
-                "active": True,
-                "salt": "c6b02c39a66d2460b6a3a3885b467ad0",
-                "password_hash": "f951c24eead1d41496fc80c791f5ac802af477002998494b058dde362f1e2dda"
-            }
-        ]
     try:
-        with AUTH_USERS_PATH.open("r", encoding="utf-8") as file:
-            payload = json.load(file)
-        return payload.get("users", [])
+        secret_auth = st.secrets.get("auth", {})
+        secret_users = normalize_auth_users(secret_auth.get("users", []))
+        if secret_users:
+            return secret_users, "st.secrets"
     except Exception:
-        # Return default user if JSON is corrupted
-        return [
-            {
-                "username": "admin",
-                "display_name": "Administrator",
-                "role": "Admin",
-                "active": True,
-                "salt": "c6b02c39a66d2460b6a3a3885b467ad0",
-                "password_hash": "f951c24eead1d41496fc80c791f5ac802af477002998494b058dde362f1e2dda"
-            }
-        ]
+        pass
+
+    if AUTH_USERS_PATH.exists():
+        try:
+            with AUTH_USERS_PATH.open("r", encoding="utf-8") as file:
+                payload = json.load(file)
+            file_users = normalize_auth_users(payload.get("users", []))
+            if file_users:
+                try:
+                    source = str(AUTH_USERS_PATH.relative_to(BASE_DIR)).replace("\\", "/")
+                except ValueError:
+                    source = str(AUTH_USERS_PATH)
+                return file_users, source
+        except Exception:
+            pass
+
+    return [], None
 
 
 def verify_password(password, salt_hex, password_hash_hex):
-    salt = binascii.unhexlify(salt_hex.encode("utf-8"))
-    computed_hash = hashlib.pbkdf2_hmac(
-        "sha256", password.encode("utf-8"), salt, 120000
-    )
-    return binascii.hexlify(computed_hash).decode("utf-8") == password_hash_hex
+    try:
+        salt = binascii.unhexlify(salt_hex.encode("utf-8"))
+        computed_hash = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), salt, 120000
+        )
+        return binascii.hexlify(computed_hash).decode("utf-8") == password_hash_hex
+    except (TypeError, ValueError, binascii.Error):
+        return False
 
 
 def init_auth_state():
@@ -762,7 +1344,7 @@ def init_auth_state():
 
 
 def attempt_login(username, password):
-    users = load_auth_config()
+    users, _ = load_auth_config()
     normalized_username = username.strip().lower()
     for user in users:
         if not user.get("active", True):
@@ -796,7 +1378,7 @@ def _legacy_render_sidebar_user():
         <div class="sidebar-user-card">
             <div class="sidebar-user-label">Aktywna sesja</div>
             <div class="sidebar-user-name">{auth_user.get('display_name', 'User')}</div>
-            <div class="sidebar-user-role">{auth_user.get('role', 'User')} · {auth_user.get('username', '')}</div>
+            <div class="sidebar-user-role">{auth_user.get('role', 'User')} Â· {auth_user.get('username', '')}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -807,6 +1389,7 @@ def _legacy_render_sidebar_user():
 
 
 def render_login_screen():
+    auth_users, auth_source = load_auth_config()
     st.markdown('<div class="login-shell">', unsafe_allow_html=True)
     left_col, right_col = st.columns([1.18, 0.92], gap="large")
     with left_col:
@@ -820,23 +1403,23 @@ def render_login_screen():
             <div class="login-brand-card">
                 {logo_html}
                 <div class="login-kicker">Secure Access</div>
-                <div class="login-title">Analiza zamówień i wysyłek</div>
+                <div class="login-title">Analiza zamĂłwieĹ„ i wysyĹ‚ek</div>
                 <div class="login-copy">
-                    Zaloguj się, aby otworzyć dashboard, porównywać dwa pliki Excel i generować raporty
-                    dla planowania, logistyki oraz przeglądów managerskich.
+                    Zaloguj siÄ™, aby otworzyÄ‡ dashboard, porĂłwnywaÄ‡ dwa pliki Excel i generowaÄ‡ raporty
+                    dla planowania, logistyki oraz przeglÄ…dĂłw managerskich.
                 </div>
                 <div class="login-points">
                     <div class="login-point">
                         <div class="login-point-title">Premium dashboard analytics</div>
-                        <div class="login-point-copy">Czytelne KPI, alerty, wykresy i macierz zmian z wyraźną hierarchią informacji.</div>
+                        <div class="login-point-copy">Czytelne KPI, alerty, wykresy i macierz zmian z wyraĹşnÄ… hierarchiÄ… informacji.</div>
                     </div>
                     <div class="login-point">
                         <div class="login-point-title">Raport gotowy do eksportu</div>
                         <div class="login-point-copy">Filtrowane dane CSV i biznesowy raport Excel przygotowany do dalszej pracy.</div>
                     </div>
                     <div class="login-point">
-                        <div class="login-point-title">Dostęp na wielu komputerach</div>
-                        <div class="login-point-copy">Ta sama aplikacja może działać lokalnie, w sieci LAN lub jako uruchamiany launcher EXE.</div>
+                        <div class="login-point-title">DostÄ™p na wielu komputerach</div>
+                        <div class="login-point-copy">Ta sama aplikacja moĹĽe dziaĹ‚aÄ‡ lokalnie, w sieci LAN lub jako uruchamiany launcher EXE.</div>
                     </div>
                 </div>
             </div>
@@ -847,27 +1430,43 @@ def render_login_screen():
         st.markdown(
             """
             <div class="login-form-card">
-                <div class="login-form-heading">Zaloguj się do aplikacji</div>
+                <div class="login-form-heading">Zaloguj siÄ™ do aplikacji</div>
                 <div class="login-form-copy">
-                    Użyj swojego loginu i hasła, aby otworzyć panel analityczny. Dane dostępowe są trzymane
+                    UĹĽyj swojego loginu i hasĹ‚a, aby otworzyÄ‡ panel analityczny. Dane dostÄ™powe sÄ… trzymane
                     lokalnie w konfiguracji aplikacji.
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
-        with st.form("login_form", clear_on_submit=False):
-            username = st.text_input("Login")
-            password = st.text_input("Hasło", type="password")
-            submitted = st.form_submit_button("Zaloguj", use_container_width=True)
-        if submitted:
-            if attempt_login(username, password):
-                st.success("Logowanie zakończone powodzeniem.")
-                st.rerun()
-            st.error("Nieprawidłowy login lub hasło.")
-        st.info(
-            "Domyślny login jest zapisany w pliku config/users.json. Po wdrożeniu zmień hasło administratora."
-        )
+        if auth_users:
+            st.caption(f"Źródło logowania: {auth_source}")
+            with st.form("login_form", clear_on_submit=False):
+                username = st.text_input("Login")
+                password = st.text_input("HasĹ‚o", type="password")
+                submitted = st.form_submit_button("Zaloguj", use_container_width=True)
+            if submitted:
+                if attempt_login(username, password):
+                    st.success("Logowanie zakoĹ„czone powodzeniem.")
+                    st.rerun()
+                st.error("NieprawidĹ‚owy login lub hasĹ‚o.")
+            st.info(
+                "Na Streamlit Community Cloud ustaw użytkowników w st.secrets. Lokalnie możesz użyć .streamlit/secrets.toml albo config/users.json."
+            )
+        else:
+            st.error(
+                "Brak skonfigurowanych użytkowników. Dodaj sekcję [auth] do .streamlit/secrets.toml lub utwórz plik config/users.json na podstawie pliku przykładowego."
+            )
+            st.code(
+                """[[auth.users]]
+username = "planner"
+display_name = "Planner"
+role = "Analyst"
+active = true
+salt = "REPLACE_WITH_HEX_SALT"
+password_hash = "REPLACE_WITH_HEX_HASH" """,
+                language="toml",
+            )
     st.markdown("</div>", unsafe_allow_html=True)
 
 
@@ -1080,10 +1679,10 @@ def build_quantity_chart(date_summary, x_title):
         .mark_line(strokeWidth=2.2, interpolate="monotone", color="#8f9caf", strokeDash=[5, 4])
         .encode(
             x=alt.X("Analysis Date:T", title=x_title, axis=alt.Axis(labelAngle=-24, labelLimit=140)),
-            y=alt.Y("Quantity_Prev:Q", title="Ilość otwarta"),
+            y=alt.Y("Quantity_Prev:Q", title="IloĹ›Ä‡ otwarta"),
             tooltip=[
                 alt.Tooltip("Analysis Date:T", title="Data"),
-                alt.Tooltip("Quantity_Prev:Q", title="Poprzednia ilość", format=",.0f"),
+                alt.Tooltip("Quantity_Prev:Q", title="Poprzednia iloĹ›Ä‡", format=",.0f"),
             ],
         )
     )
@@ -1092,7 +1691,7 @@ def build_quantity_chart(date_summary, x_title):
         .mark_area(color="#6b89b6", opacity=0.12, interpolate="monotone")
         .encode(
             x=alt.X("Analysis Date:T", title=x_title, axis=alt.Axis(labelAngle=-24, labelLimit=140)),
-            y=alt.Y("Quantity_Curr:Q", title="Ilość otwarta"),
+            y=alt.Y("Quantity_Curr:Q", title="IloĹ›Ä‡ otwarta"),
         )
     )
     current_line = (
@@ -1105,11 +1704,11 @@ def build_quantity_chart(date_summary, x_title):
         )
         .encode(
             x=alt.X("Analysis Date:T", title=x_title, axis=alt.Axis(labelAngle=-24, labelLimit=140)),
-            y=alt.Y("Quantity_Curr:Q", title="Ilość otwarta"),
+            y=alt.Y("Quantity_Curr:Q", title="IloĹ›Ä‡ otwarta"),
             tooltip=[
                 alt.Tooltip("Analysis Date:T", title="Data"),
-                alt.Tooltip("Quantity_Prev:Q", title="Poprzednia ilość", format=",.0f"),
-                alt.Tooltip("Quantity_Curr:Q", title="Aktualna ilość", format=",.0f"),
+                alt.Tooltip("Quantity_Prev:Q", title="Poprzednia iloĹ›Ä‡", format=",.0f"),
+                alt.Tooltip("Quantity_Curr:Q", title="Aktualna iloĹ›Ä‡", format=",.0f"),
                 alt.Tooltip("Delta:Q", title="Bilans zmian", format=",.0f"),
             ],
         )
@@ -1171,7 +1770,7 @@ def build_delta_chart(date_summary, x_title):
         .mark_bar(cornerRadiusTopLeft=7, cornerRadiusTopRight=7, opacity=0.92, size=20)
         .encode(
             x=alt.X("Analysis Date:T", title=x_title, axis=alt.Axis(labelAngle=-24, labelLimit=140)),
-            y=alt.Y("Delta:Q", title="Zmiana ilości"),
+            y=alt.Y("Delta:Q", title="Zmiana iloĹ›ci"),
             color=alt.condition(
                 alt.datum.Delta >= 0,
                 alt.value("#5f8b75"),
@@ -1179,8 +1778,8 @@ def build_delta_chart(date_summary, x_title):
             ),
             tooltip=[
                 alt.Tooltip("Analysis Date:T", title="Data"),
-                alt.Tooltip("Delta:Q", title="Zmiana ilości", format=",.0f"),
-                alt.Tooltip("Alerts:Q", title="Liczba alertów"),
+                alt.Tooltip("Delta:Q", title="Zmiana iloĹ›ci", format=",.0f"),
+                alt.Tooltip("Alerts:Q", title="Liczba alertĂłw"),
             ],
         )
     )
@@ -1228,14 +1827,14 @@ def build_product_bar_chart(product_summary, chart_type):
             .nlargest(10, "Delta")[["Part Description", "Delta"]]
         )
         color = "#5f8b75"
-        title = "Największe wzrosty"
+        title = "NajwiÄ™ksze wzrosty"
     else:
         source = (
             product_summary[product_summary["Delta"] < 0]
             .nsmallest(10, "Delta")[["Part Description", "Delta"]]
         )
         color = "#c56b61"
-        title = "Największe spadki"
+        title = "NajwiÄ™ksze spadki"
 
     if source.empty:
         return None, title
@@ -1248,7 +1847,7 @@ def build_product_bar_chart(product_summary, chart_type):
         alt.Chart(source)
         .mark_bar(cornerRadiusTopRight=6, cornerRadiusBottomRight=6, color=color, opacity=0.94)
         .encode(
-            x=alt.X("Delta:Q", title="Zmiana ilości"),
+            x=alt.X("Delta:Q", title="Zmiana iloĹ›ci"),
             y=alt.Y(
                 "Display Label:N",
                 sort="-x",
@@ -1257,7 +1856,7 @@ def build_product_bar_chart(product_summary, chart_type):
             ),
             tooltip=[
                 alt.Tooltip("Part Description:N", title="Produkt"),
-                alt.Tooltip("Delta:Q", title="Zmiana ilości", format=",.0f"),
+                alt.Tooltip("Delta:Q", title="Zmiana iloĹ›ci", format=",.0f"),
             ],
         )
         .properties(height=max(340, len(source) * 34))
@@ -1308,7 +1907,7 @@ def build_change_mix_chart(dataframe):
             tooltip=[
                 alt.Tooltip("Direction Label:N", title="Kierunek"),
                 alt.Tooltip("Rows:Q", title="Liczba pozycji"),
-                alt.Tooltip("Share:Q", title="Udział", format=".1%"),
+                alt.Tooltip("Share:Q", title="UdziaĹ‚", format=".1%"),
                 alt.Tooltip("Total_Delta:Q", title="Bilans zmian", format=",.0f"),
             ],
         )
@@ -1340,7 +1939,7 @@ def build_key_findings(dataframe, product_summary, date_summary, date_basis):
     largest_move = ranked.iloc[0]
     findings.append(
         {
-            "label": "Największa zmiana",
+            "label": "NajwiÄ™ksza zmiana",
             "title": largest_move["Part Description"],
             "copy": (
                 f"Najsilniejszy ruch w badanym oknie: {format_signed_int(largest_move['Delta'])} szt."
@@ -1353,7 +1952,7 @@ def build_key_findings(dataframe, product_summary, date_summary, date_basis):
         largest_drop = negative.nsmallest(1, "Delta").iloc[0]
         findings.append(
             {
-                "label": "Największy spadek",
+                "label": "NajwiÄ™kszy spadek",
                 "title": largest_drop["Part Description"],
                 "copy": (
                     f"Ta pozycja notuje najmocniejszy spadek: {format_signed_int(largest_drop['Delta'])} szt."
@@ -1370,10 +1969,10 @@ def build_key_findings(dataframe, product_summary, date_summary, date_basis):
         top_alert = alert_summary.iloc[0]
         findings.append(
             {
-                "label": "Najwięcej alertów",
+                "label": "NajwiÄ™cej alertĂłw",
                 "title": top_alert["Part Description"],
                 "copy": (
-                    f"Produkt pojawia się w {int(top_alert['Alert_Count'])} alertach i wymaga szybkiej weryfikacji."
+                    f"Produkt pojawia siÄ™ w {int(top_alert['Alert_Count'])} alertach i wymaga szybkiej weryfikacji."
                 ),
             }
         )
@@ -1391,10 +1990,10 @@ def build_key_findings(dataframe, product_summary, date_summary, date_basis):
             )
             findings.append(
                 {
-                    "label": "Kluczowy dzień",
+                    "label": "Kluczowy dzieĹ„",
                     "title": day_product["Part Description"],
                     "copy": (
-                        f"Dnia {format_date(peak_row['Analysis Date'])} ta pozycja wygenerowała zmianę {format_signed_int(day_product['Delta'])} szt."
+                        f"Dnia {format_date(peak_row['Analysis Date'])} ta pozycja wygenerowaĹ‚a zmianÄ™ {format_signed_int(day_product['Delta'])} szt."
                     ),
                 }
             )
@@ -1635,6 +2234,12 @@ def write_summary_sheet(
     total_delta = detail_df["Delta"].sum()
     alert_count = int(detail_df["Alert"].sum())
     products_changed = int((product_summary["Delta"] != 0).sum())
+    new_positions = int(
+        ((detail_df["Quantity_Prev"] == 0) & (detail_df["Quantity_Curr"] > 0)).sum()
+    )
+    removed_positions = int(
+        ((detail_df["Quantity_Prev"] > 0) & (detail_df["Quantity_Curr"] == 0)).sum()
+    )
 
     worksheet["D4"] = "Previous Qty"
     worksheet["E4"] = total_prev
@@ -1646,6 +2251,10 @@ def write_summary_sheet(
     worksheet["E7"] = alert_count
     worksheet["D8"] = "Products Changed"
     worksheet["E8"] = products_changed
+    worksheet["D9"] = "New Positions"
+    worksheet["E9"] = new_positions
+    worksheet["D10"] = "Removed Positions"
+    worksheet["E10"] = removed_positions
 
     worksheet["A13"] = "Key Findings"
     worksheet["A13"].font = Font(size=13, bold=True, color="0F172A")
@@ -1744,6 +2353,439 @@ def to_excel_bytes(
     return output.getvalue()
 
 
+def render_loaded_dashboard(prev_meta, curr_meta, result):
+    full_product_summary = summarize_products(result)
+    all_products = full_product_summary["Product Label"].tolist()
+
+    render_sidebar_section(
+        "Analytics Workspace",
+        "Panel filtrowania",
+        "Wybierz oĹ› dat, zawÄ™Ĺş produkty, kierunek zmiany i zakres okresu. Logika porĂłwnawcza i eksportowa pozostaje bez zmian.",
+    )
+    if logo_available():
+        st.sidebar.image(str(LOGO_PATH), use_container_width=True)
+
+    date_basis = st.sidebar.radio(
+        "OĹ› dat",
+        DATE_OPTIONS,
+        index=0,
+        format_func=get_date_label,
+    )
+    selected_products = st.sidebar.multiselect(
+        "Produkty",
+        options=all_products,
+        default=all_products,
+        placeholder="Wybierz jeden lub wiele produktĂłw",
+    )
+    search_term = st.sidebar.text_input(
+        "Szukaj po numerze lub opisie",
+        placeholder="np. 123456 lub housing",
+    )
+    selected_change_directions = st.sidebar.multiselect(
+        "Kierunek zmiany",
+        options=["Increase", "Decrease", "No Change"],
+        default=["Increase", "Decrease", "No Change"],
+        format_func=get_change_label,
+    )
+    only_alerts = st.sidebar.checkbox(f"Tylko alerty >= {THRESHOLD}%")
+
+    available_dates = result[date_basis].dropna().sort_values()
+    if available_dates.empty:
+        st.error("Brak poprawnych dat do analizy dla wybranej osi. SprawdĹş dane w arkuszu Raw.")
+        return
+
+    min_date = available_dates.min().date()
+    max_date = available_dates.max().date()
+    selected_date_input = st.sidebar.date_input(
+        f"Zakres: {get_date_label(date_basis)}",
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date,
+        help="Wybierz jeden dzieĹ„ albo peĹ‚ny zakres dat do analizy.",
+    )
+    selected_start_date, selected_end_date = normalize_date_selection(
+        selected_date_input,
+        min_date,
+        max_date,
+    )
+    if selected_start_date > selected_end_date:
+        selected_start_date, selected_end_date = selected_end_date, selected_start_date
+
+    filtered_df = result.copy()
+    filtered_df = filtered_df[
+        filtered_df[date_basis].dt.date.between(
+            selected_start_date,
+            selected_end_date,
+        )
+    ]
+
+    if selected_products:
+        filtered_df = filtered_df[filtered_df["Product Label"].isin(selected_products)]
+    else:
+        filtered_df = filtered_df.iloc[0:0]
+
+    if search_term.strip():
+        query = search_term.strip().lower()
+        filtered_df = filtered_df[
+            filtered_df["Part Number"].str.lower().str.contains(query, na=False)
+            | filtered_df["Part Description"].str.lower().str.contains(query, na=False)
+        ]
+
+    filtered_df = filtered_df[
+        filtered_df["Change Direction"].isin(selected_change_directions)
+    ]
+
+    if only_alerts:
+        filtered_df = filtered_df[filtered_df["Alert"]]
+
+    product_summary = summarize_products(filtered_df)
+    date_summary = summarize_dates(filtered_df, date_basis)
+    metrics = compute_dashboard_metrics(filtered_df, product_summary)
+    key_findings = [] if filtered_df.empty else build_key_findings(
+        filtered_df,
+        product_summary,
+        date_summary,
+        date_basis,
+    )
+    top_alert_products = prepare_top_alert_products_table(product_summary, limit=12)
+    highlight_table = prepare_highlight_table(product_summary, limit=12)
+
+    render_sidebar_section(
+        "Current Scope",
+        "Aktywne okno analizy",
+        (
+            f"{metrics['rows']:,} wierszy, {metrics['products_in_scope']:,} produktĂłw i "
+            f"{metrics['alert_count']:,} alertĂłw w okresie {format_period_label(selected_start_date, selected_end_date)}."
+        ),
+    )
+
+    render_context_bar(
+        build_context_items(
+            prev_meta,
+            curr_meta,
+            date_basis,
+            selected_start_date,
+            selected_end_date,
+            len(selected_products) if selected_products else 0,
+            len(all_products),
+        )
+    )
+    render_dashboard_hero(
+        prev_meta,
+        curr_meta,
+        date_basis,
+        selected_start_date,
+        selected_end_date,
+        metrics,
+    )
+
+    if filtered_df.empty:
+        render_section_header(
+            "No Data",
+            "Brak wynikĂłw po filtrowaniu",
+            "Kontekst i pliki sÄ… poprawnie wczytane, ale aktualny zestaw filtrĂłw nie zwrĂłciĹ‚ rekordĂłw do analizy.",
+        )
+        render_empty_filtered_state()
+        return
+
+    render_section_header(
+        "Executive Overview",
+        "KPI dashboard",
+        "Nowoczesny zestaw kart pokazujÄ…cy punkt odniesienia, aktualny wolumen, skalÄ™ alertĂłw oraz nowe lub usuniÄ™te pozycje.",
+    )
+    render_status_pills(
+        metrics["total_delta"],
+        metrics["alert_count"],
+        metrics["products_changed"],
+    )
+    metric_cols = st.columns(7, gap="large")
+    with metric_cols[0]:
+        render_kpi_card(
+            "Poprzednia iloĹ›Ä‡",
+            format_number(metrics["total_prev"]),
+            "Bazowy release do porĂłwnania",
+        )
+    with metric_cols[1]:
+        render_kpi_card(
+            "Aktualna iloĹ›Ä‡",
+            format_number(metrics["total_curr"]),
+            f"Zmiana wzglÄ™dem previous {format_signed_int(metrics['total_delta'])}",
+            tone="positive" if metrics["total_delta"] > 0 else "negative" if metrics["total_delta"] < 0 else "neutral",
+        )
+    with metric_cols[2]:
+        render_kpi_card(
+            "Bilans zmian",
+            format_signed_int(metrics["total_delta"]),
+            "Current minus previous release",
+            tone="positive" if metrics["total_delta"] > 0 else "negative" if metrics["total_delta"] < 0 else "neutral",
+        )
+    with metric_cols[3]:
+        render_kpi_card(
+            "Liczba alertĂłw",
+            f"{metrics['alert_count']:,}",
+            f"{metrics['alert_ratio']:.1%} rekordĂłw przekracza prĂłg {THRESHOLD}%",
+            tone="alert",
+        )
+    with metric_cols[4]:
+        render_kpi_card(
+            "Zmienne produkty",
+            f"{metrics['products_changed']:,}",
+            f"z {metrics['products_in_scope']:,} aktywnych produktĂłw",
+        )
+    with metric_cols[5]:
+        render_kpi_card(
+            "Nowe pozycje",
+            f"{metrics['new_positions']:,}",
+            f"w tym {metrics['new_products']:,} produktĂłw",
+            tone="positive" if metrics["new_positions"] else "neutral",
+        )
+    with metric_cols[6]:
+        render_kpi_card(
+            "UsuniÄ™te pozycje",
+            f"{metrics['removed_positions']:,}",
+            f"w tym {metrics['removed_products']:,} produktĂłw",
+            tone="negative" if metrics["removed_positions"] else "neutral",
+        )
+
+    render_section_header(
+        "Executive Summary",
+        "Kluczowe wnioski",
+        "Blok insight cards prowadzi od najwaĹĽniejszych sygnaĹ‚Ăłw biznesowych do dalszego drill-downu w dashboardzie.",
+    )
+    if key_findings:
+        finding_cols = st.columns(max(1, min(len(key_findings), 4)), gap="large")
+        for idx, finding in enumerate(key_findings):
+            with finding_cols[idx]:
+                render_finding_card(
+                    finding["label"],
+                    finding["title"],
+                    finding["copy"],
+                )
+    else:
+        st.info("Brak insightĂłw do pokazania dla bieĹĽÄ…cego zestawu filtrĂłw.")
+
+    dashboard_tab, product_tab, matrix_tab, detail_tab = st.tabs(
+        ["Dashboard", "Raport produktu", "Macierz release'u", "Dane szczegĂłĹ‚owe"]
+    )
+
+    with dashboard_tab:
+        render_section_header(
+            "Dashboard",
+            "Flow analityczny od ogĂłĹ‚u do szczegĂłĹ‚u",
+            "Najpierw peĹ‚ny trend previous vs current, niĹĽej delta i mix zmian, nastÄ™pnie najwiÄ™ksze ruchy, alerty oraz tabele priorytetowe.",
+        )
+        st.altair_chart(
+            build_quantity_chart(date_summary, get_date_label(date_basis)),
+            use_container_width=True,
+        )
+
+        trend_left, trend_right = st.columns([1.45, 1], gap="large")
+        with trend_left:
+            st.subheader("Delta w czasie")
+            st.caption("Bilans zmian pokazuje, w ktĂłrych dniach release najmocniej odchyliĹ‚ siÄ™ od poprzedniej wersji.")
+            st.altair_chart(
+                build_delta_chart(date_summary, get_date_label(date_basis)),
+                use_container_width=True,
+            )
+        with trend_right:
+            st.subheader("Struktura zmian")
+            st.caption("Szybki podglÄ…d proporcji wzrostĂłw, spadkĂłw i pozycji bez zmian w aktualnym oknie analizy.")
+            st.altair_chart(
+                build_change_mix_chart(filtered_df),
+                use_container_width=True,
+            )
+
+        increase_chart, increase_title = build_product_bar_chart(product_summary, "increase")
+        decrease_chart, decrease_title = build_product_bar_chart(product_summary, "decrease")
+        dashboard_left, dashboard_right = st.columns(2, gap="large")
+
+        with dashboard_left:
+            st.subheader(increase_title)
+            if increase_chart is None:
+                st.info("Brak produktĂłw ze wzrostem w aktualnym filtrowaniu.")
+            else:
+                st.altair_chart(increase_chart, use_container_width=True)
+
+        with dashboard_right:
+            st.subheader(decrease_title)
+            if decrease_chart is None:
+                st.info("Brak produktĂłw ze spadkiem w aktualnym filtrowaniu.")
+            else:
+                st.altair_chart(decrease_chart, use_container_width=True)
+
+        render_section_header(
+            "Priority Alerts",
+            "Top alert products",
+            "Tabela agregowana po produkcie. DomyĹ›lnie sortowana malejÄ…co po liczbie alertĂłw, z dodatkowym priorytetem dla najwiÄ™kszych zmian wolumenu.",
+        )
+        if top_alert_products.empty:
+            st.info("Brak produktĂłw z alertami w bieĹĽÄ…cym zakresie.")
+        else:
+            st.dataframe(top_alert_products, use_container_width=True, height=360)
+
+        render_section_header(
+            "Priority Changes",
+            "NajwaĹĽniejsze zmiany",
+            "Najmocniejsze ruchy po produkcie, uporzÄ…dkowane wedĹ‚ug bezwzglÄ™dnej zmiany wolumenu i gotowe do szybkiego przeglÄ…du operacyjnego.",
+        )
+        st.dataframe(highlight_table, use_container_width=True, height=360)
+
+    with product_tab:
+        render_section_header(
+            "Product Focus",
+            "Raport produktu",
+            "Drill-down dla pojedynczego part number z osobnym trendem, deltÄ… i tabelÄ… szczegĂłĹ‚owÄ… dla wszystkich dat w aktywnym zakresie.",
+        )
+        selected_product_label = st.selectbox(
+            "Wybierz produkt",
+            options=product_summary["Product Label"].tolist(),
+            help="Lista odzwierciedla aktualny zakres filtrĂłw z sidebaru.",
+        )
+        product_detail = filtered_df[
+            filtered_df["Product Label"] == selected_product_label
+        ].sort_values(date_basis)
+        product_date_summary = summarize_dates(product_detail, date_basis)
+        product_metrics = compute_dashboard_metrics(
+            product_detail,
+            summarize_products(product_detail),
+        )
+
+        product_metric_cols = st.columns(4, gap="large")
+        with product_metric_cols[0]:
+            render_kpi_card(
+                "Poprzednia iloĹ›Ä‡",
+                format_number(product_metrics["total_prev"]),
+                "Wolumen z poprzedniego release'u",
+            )
+        with product_metric_cols[1]:
+            render_kpi_card(
+                "Aktualna iloĹ›Ä‡",
+                format_number(product_metrics["total_curr"]),
+                "Wolumen po aktualizacji release'u",
+            )
+        with product_metric_cols[2]:
+            render_kpi_card(
+                "Bilans zmian",
+                format_signed_int(product_metrics["total_delta"]),
+                "Suma zmian dla wybranego produktu",
+                tone="positive" if product_metrics["total_delta"] > 0 else "negative" if product_metrics["total_delta"] < 0 else "neutral",
+            )
+        with product_metric_cols[3]:
+            render_kpi_card(
+                "Liczba alertĂłw",
+                f"{product_metrics['alert_count']:,}",
+                f"{product_metrics['alert_ratio']:.1%} rekordĂłw produktu",
+                tone="alert" if product_metrics["alert_count"] else "neutral",
+            )
+
+        product_chart_left, product_chart_right = st.columns(2, gap="large")
+        with product_chart_left:
+            st.altair_chart(
+                build_quantity_chart(product_date_summary, get_date_label(date_basis)),
+                use_container_width=True,
+            )
+        with product_chart_right:
+            st.altair_chart(
+                build_delta_chart(product_date_summary, get_date_label(date_basis)),
+                use_container_width=True,
+            )
+
+        render_section_header(
+            "Product Records",
+            "SzczegĂłĹ‚y wybranego produktu",
+            "Tabela utrzymuje peĹ‚ny kontekst dat, procent zmian, kierunku ruchu oraz flag alertĂłw dla pojedynczego produktu.",
+        )
+        product_table = prepare_product_detail_table(product_detail)
+        st.dataframe(product_table, use_container_width=True, height=360)
+
+    with matrix_tab:
+        render_section_header(
+            "Release Matrix",
+            "Macierz release'u",
+            "Widok tabelaryczny w stylu plannerskiego workspace. Wybierz metrykÄ™ i porĂłwnaj rozkĹ‚ad wartoĹ›ci po datach dla aktywnego zestawu filtrĂłw.",
+        )
+        matrix_metric = st.radio(
+            "Metryka",
+            options=["Current Quantity", "Previous Quantity", "Delta", "Percent Change"],
+            horizontal=True,
+            format_func=get_metric_label,
+        )
+        st.caption(
+            "Macierz zachowuje dotychczasowÄ… logikÄ™ liczenia i tylko poprawia oprawÄ™ sekcji oraz czytelnoĹ›Ä‡ wyboru metryki."
+        )
+        matrix = build_matrix(filtered_df, date_basis, matrix_metric)
+        matrix_cells = matrix.shape[0] * max(matrix.shape[1], 1)
+
+        if matrix.empty:
+            st.info("Brak danych do macierzy.")
+        elif matrix_cells <= MAX_MATRIX_STYLE_CELLS:
+            st.dataframe(
+                style_matrix(matrix, matrix_metric),
+                use_container_width=True,
+                height=520,
+            )
+        else:
+            st.info(
+                "Macierz jest zbyt duĹĽa do stylowania, dlatego pokazujÄ™ jÄ… bez dodatkowego formatowania."
+            )
+            st.dataframe(matrix, use_container_width=True, height=520)
+
+    with detail_tab:
+        render_section_header(
+            "Detailed Data",
+            "Dane szczegĂłĹ‚owe i eksport",
+            "PeĹ‚ny podglÄ…d filtrowanych rekordĂłw z limitem preview oraz gotowymi eksportami CSV i Excel bez zmiany dotychczasowej logiki raportowej.",
+        )
+        detail_table = prepare_detail_table(filtered_df)
+        current_matrix_for_export = build_matrix(filtered_df, date_basis, "Current Quantity")
+        delta_matrix_for_export = build_matrix(filtered_df, date_basis, "Delta")
+        excel_bytes = to_excel_bytes(
+            filtered_df,
+            current_matrix_for_export,
+            delta_matrix_for_export,
+            prev_meta,
+            curr_meta,
+            product_summary,
+            date_basis,
+            selected_start_date,
+            selected_end_date,
+            key_findings,
+        )
+        csv_bytes = detail_table.to_csv(index=False).encode("utf-8-sig")
+
+        detail_controls = st.columns([1, 1, 1], gap="large")
+        with detail_controls[0]:
+            preview_limit = st.selectbox(
+                "Liczba wierszy w podglÄ…dzie",
+                options=[100, 250, 500, 1000],
+                index=2,
+            )
+        with detail_controls[1]:
+            st.download_button(
+                "Pobierz filtrowane dane CSV",
+                data=csv_bytes,
+                file_name="pjoter_development_release_change_filtered.csv",
+                mime="text/csv",
+            )
+        with detail_controls[2]:
+            st.download_button(
+                "Pobierz raport Excel",
+                data=excel_bytes,
+                file_name="pjoter_development_release_change_report.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+
+        if len(detail_table) > preview_limit:
+            st.info(
+                f"Pokazuje pierwsze {preview_limit} z {len(detail_table)} wierszy. PeĹ‚ny raport jest dostÄ™pny do pobrania."
+            )
+        st.dataframe(
+            detail_table.head(preview_limit),
+            use_container_width=True,
+            height=420,
+        )
+
+
 init_auth_state()
 
 if not st.session_state["authenticated"]:
@@ -1757,7 +2799,7 @@ with upload_left:
     render_upload_card(
         "Krok 1",
         "Poprzedni release / poprzedni plan",
-        "Dodaj bazowy plik Excel, do którego będzie porównywany aktualny stan zamówień i wysyłek.",
+        "Dodaj bazowy plik Excel, do ktĂłrego bÄ™dzie porĂłwnywany aktualny stan zamĂłwieĹ„ i wysyĹ‚ek.",
     )
     prev_file = st.file_uploader(
         "Upload Previous Release",
@@ -1769,7 +2811,7 @@ with upload_right:
     render_upload_card(
         "Krok 2",
         "Aktualny release / aktualny plan",
-        "Dodaj nowy plik Excel, aby dashboard automatycznie policzył delty, alerty i zmiany procentowe.",
+        "Dodaj nowy plik Excel, aby dashboard automatycznie policzyĹ‚ delty, alerty i zmiany procentowe.",
     )
     current_file = st.file_uploader(
         "Upload Current Release",
@@ -1782,25 +2824,25 @@ if prev_file is None and current_file is None:
     quick_cols = st.columns(3, gap="large")
     with quick_cols[0]:
         render_quick_card(
-            "Czytelny dashboard porównawczy",
-            "Aplikacja zestawia poprzedni i aktualny release, od razu pokazując bilans zmian, alerty oraz produkty z największym ruchem.",
+            "Czytelny dashboard porĂłwnawczy",
+            "Aplikacja zestawia poprzedni i aktualny release, od razu pokazujÄ…c bilans zmian, alerty oraz produkty z najwiÄ™kszym ruchem.",
         )
     with quick_cols[1]:
         render_quick_card(
             "Macierz podobna do Excela",
-            "Otrzymujesz widok tabelaryczny z datami, zmianami ilości i filtrowaniem po produkcie, kierunku ruchu oraz zakresie dat.",
+            "Otrzymujesz widok tabelaryczny z datami, zmianami iloĹ›ci i filtrowaniem po produkcie, kierunku ruchu oraz zakresie dat.",
         )
     with quick_cols[2]:
         render_quick_card(
-            "Raport gotowy do wysłania",
+            "Raport gotowy do wysĹ‚ania",
             "Po analizie pobierzesz CSV oraz biznesowy raport Excel z podsumowaniem KPI i kluczowymi zmianami.",
         )
-    st.info("Zacznij od dodania dwóch plików Excel. Po załadowaniu obu release'ów dashboard uruchomi pełną analizę porównawczą.")
+    st.info("Zacznij od dodania dwĂłch plikĂłw Excel. Po zaĹ‚adowaniu obu release'Ăłw dashboard uruchomi peĹ‚nÄ… analizÄ™ porĂłwnawczÄ….")
 elif prev_file is None or current_file is None:
     missing_label = "poprzedni" if prev_file is None else "aktualny"
     loaded_label = "aktualny" if prev_file is None else "poprzedni"
     st.info(
-        f"Plik {loaded_label} jest już dodany. Dodaj jeszcze plik {missing_label}, aby uruchomić analizę i wygenerować dashboard."
+        f"Plik {loaded_label} jest juĹĽ dodany. Dodaj jeszcze plik {missing_label}, aby uruchomiÄ‡ analizÄ™ i wygenerowaÄ‡ dashboard."
     )
 else:
     try:
@@ -1808,481 +2850,8 @@ else:
         curr_df, curr_meta = load_release(current_file.getvalue(), current_file.name)
         result = compare_releases(prev_df, curr_df)
     except Exception as exc:
-        st.error(f"Błąd: {exc}")
+        st.error(f"BĹ‚Ä…d: {exc}")
     else:
-        st.sidebar.header("Filtry")
-        if logo_available():
-            st.sidebar.image(str(LOGO_PATH), use_container_width=True)
-        date_basis = st.sidebar.radio(
-            "Oś dat",
-            DATE_OPTIONS,
-            index=0,
-            format_func=get_date_label,
-        )
+        render_loaded_dashboard(prev_meta, curr_meta, result)
+        st.stop()
 
-        full_product_summary = summarize_products(result)
-        all_products = full_product_summary["Product Label"].tolist()
-        selected_products = st.sidebar.multiselect(
-            "Produkty",
-            options=all_products,
-            default=all_products,
-        )
-        search_term = st.sidebar.text_input("Szukaj po numerze lub opisie")
-        selected_change_directions = st.sidebar.multiselect(
-            "Kierunek zmiany",
-            options=["Increase", "Decrease", "No Change"],
-            default=["Increase", "Decrease", "No Change"],
-            format_func=get_change_label,
-        )
-        only_alerts = st.sidebar.checkbox(f"Tylko alerty >= {THRESHOLD}%")
-
-        available_dates = result[date_basis].dropna().sort_values()
-        min_date = available_dates.min().date()
-        max_date = available_dates.max().date()
-        selected_date_input = st.date_input(
-            f"Kalendarz: {get_date_label(date_basis)}",
-            value=(min_date, max_date),
-            min_value=min_date,
-            max_value=max_date,
-            help="Wybierz jeden dzień albo zakres dat do analizy.",
-        )
-        selected_start_date, selected_end_date = normalize_date_selection(
-            selected_date_input, min_date, max_date
-        )
-        if selected_start_date > selected_end_date:
-            selected_start_date, selected_end_date = (
-                selected_end_date,
-                selected_start_date,
-            )
-
-        filtered_df = result.copy()
-        filtered_df = filtered_df[
-            filtered_df[date_basis].dt.date.between(
-                selected_start_date, selected_end_date
-            )
-        ]
-
-        if selected_products:
-            filtered_df = filtered_df[filtered_df["Product Label"].isin(selected_products)]
-        else:
-            filtered_df = filtered_df.iloc[0:0]
-
-        if search_term.strip():
-            query = search_term.strip().lower()
-            filtered_df = filtered_df[
-                filtered_df["Part Number"].str.lower().str.contains(query, na=False)
-                | filtered_df["Part Description"].str.lower().str.contains(query, na=False)
-            ]
-
-        filtered_df = filtered_df[
-            filtered_df["Change Direction"].isin(selected_change_directions)
-        ]
-
-        if only_alerts:
-            filtered_df = filtered_df[filtered_df["Alert"]]
-
-        product_summary = summarize_products(filtered_df)
-        date_summary = summarize_dates(filtered_df, date_basis)
-        key_findings = build_key_findings(
-            filtered_df, product_summary, date_summary, date_basis
-        )
-
-        st.success("Analiza porównawcza jest gotowa.")
-
-        hero_left, hero_right = st.columns([1.8, 1], gap="large")
-        with hero_left:
-            hero_logo_html = (
-                f'<img class="hero-logo" src="{logo_data_uri()}" alt="{BRAND_NAME} logo" />'
-                if logo_available()
-                else f'<div class="brand-badge">{BRAND_NAME}</div>'
-            )
-            st.markdown(
-                f"""
-                <div class="hero-card">
-                    {hero_logo_html}
-                    <div class="hero-kicker">Release Intelligence</div>
-                    <div class="hero-title">Raport zmian dla PO {curr_meta['po_number']}</div>
-                    <p class="hero-copy">
-                        Porównaj wersje release'ów, śledź ruch dzień po dniu i szybko
-                        wychwyć produkty, które zwiększyły lub zmniejszyły wolumen w wybranym oknie.
-                    </p>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        with hero_right:
-            st.markdown(
-                f"""
-                <div class="hero-card">
-                    <div class="hero-kicker">Aktywne okno analizy</div>
-                    <div class="hero-title">{selected_start_date.strftime('%Y-%m-%d')}</div>
-                    <p class="hero-copy">
-                        do {selected_end_date.strftime('%Y-%m-%d')} na osi <strong>{get_date_label(date_basis)}</strong>
-                    </p>
-                    <div class="hero-stat-grid">
-                        <div class="hero-stat">
-                            <div class="hero-stat-label">Poprzedni release</div>
-                            <div class="hero-stat-value">v{prev_meta['release_version']}</div>
-                        </div>
-                        <div class="hero-stat">
-                            <div class="hero-stat-label">Aktualny release</div>
-                            <div class="hero-stat-value">v{curr_meta['release_version']}</div>
-                        </div>
-                        <div class="hero-stat">
-                            <div class="hero-stat-label">Poprzedni plik</div>
-                            <div class="hero-stat-value">{prev_meta['file_name']}</div>
-                        </div>
-                        <div class="hero-stat">
-                            <div class="hero-stat-label">Aktualny plik</div>
-                            <div class="hero-stat-value">{curr_meta['file_name']}</div>
-                        </div>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-        header_left, header_right = st.columns([1.5, 1], gap="large")
-        with header_left:
-            render_meta_card(
-                "Kontekst release'u",
-                [
-                    f"<strong>Numer PO:</strong> {curr_meta['po_number']}",
-                    (
-                        f"<strong>Poprzedni release:</strong> v{prev_meta['release_version']} "
-                        f"({format_date(prev_meta['release_date'])})"
-                    ),
-                    (
-                        f"<strong>Aktualny release:</strong> v{curr_meta['release_version']} "
-                        f"({format_date(curr_meta['release_date'])})"
-                    ),
-                ],
-            )
-        with header_right:
-            render_meta_card(
-                "Planista",
-                [
-                    f"<strong>Planista:</strong> {curr_meta['planner_name']}",
-                    f"<strong>Email:</strong> {curr_meta['planner_email']}",
-                    (
-                        f"<strong>Produkty w zakresie:</strong> "
-                        f"{product_summary['Part Number'].nunique()}"
-                    ),
-                ],
-            )
-
-        if filtered_df.empty:
-            st.warning(
-                "Po zastosowaniu filtrów nie ma danych do pokazania. "
-                "Poszerz zakres dat albo przywróć produkty w filtrach bocznych."
-            )
-        else:
-            total_prev = filtered_df["Quantity_Prev"].sum()
-            total_curr = filtered_df["Quantity_Curr"].sum()
-            total_delta = filtered_df["Delta"].sum()
-            alert_count = int(filtered_df["Alert"].sum())
-            products_changed = int((product_summary["Delta"] != 0).sum())
-
-            render_status_pills(total_delta, alert_count, products_changed)
-            metric_cols = st.columns(5)
-            metric_cols[0].metric("Poprzednia ilość", f"{total_prev:,.0f}")
-            metric_cols[1].metric(
-                "Aktualna ilość",
-                f"{total_curr:,.0f}",
-                delta=f"{total_curr - total_prev:+,.0f}",
-            )
-            metric_cols[2].metric("Bilans zmian", f"{total_delta:+,.0f}")
-            metric_cols[3].metric(
-                "Liczba alertów",
-                f"{alert_count:,}",
-                delta=f"{(alert_count / len(filtered_df)):.1%}",
-                delta_color="inverse",
-            )
-            metric_cols[4].metric("Zmienne produkty", f"{products_changed:,}")
-
-            st.markdown(
-                """
-                <div class="section-banner">
-                    <div class="section-kicker">Executive Summary</div>
-                    <div class="section-copy">
-                        Najważniejsze sygnały, które warto sprawdzić w pierwszej kolejności.
-                        Duży nagłówek pokazuje nazwę produktu, a krótki opis pod spodem wyjaśnia znaczenie zmiany.
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.subheader("Kluczowe wnioski")
-            finding_cols = st.columns(max(1, min(len(key_findings), 4)), gap="large")
-            for idx, finding in enumerate(key_findings):
-                with finding_cols[idx]:
-                    render_finding_card(
-                        finding["label"], finding["title"], finding["copy"]
-                    )
-
-            dashboard_tab, product_tab, matrix_tab, detail_tab = st.tabs(
-                ["Dashboard", "Raport produktu", "Macierz release'u", "Dane szczegółowe"]
-            )
-
-            with dashboard_tab:
-                st.subheader(f"Trend zmian według osi: {get_date_label(date_basis)}")
-                st.altair_chart(
-                    build_quantity_chart(date_summary, get_date_label(date_basis)),
-                    use_container_width=True,
-                )
-
-                trend_left, trend_right = st.columns([1.45, 1], gap="large")
-                with trend_left:
-                    st.altair_chart(
-                        build_delta_chart(date_summary, get_date_label(date_basis)),
-                        use_container_width=True,
-                    )
-                with trend_right:
-                    st.subheader("Struktura zmian")
-                    st.altair_chart(
-                        build_change_mix_chart(filtered_df), use_container_width=True
-                    )
-
-                increase_chart, increase_title = build_product_bar_chart(
-                    product_summary, "increase"
-                )
-                decrease_chart, decrease_title = build_product_bar_chart(
-                    product_summary, "decrease"
-                )
-                dashboard_left, dashboard_right = st.columns(2)
-
-                with dashboard_left:
-                    st.subheader(increase_title)
-                    if increase_chart is None:
-                        st.info("Brak produktów ze wzrostem w aktualnym filtrowaniu.")
-                    else:
-                        st.altair_chart(increase_chart, use_container_width=True)
-
-                with dashboard_right:
-                    st.subheader(decrease_title)
-                    if decrease_chart is None:
-                        st.info("Brak produktów ze spadkiem w aktualnym filtrowaniu.")
-                    else:
-                        st.altair_chart(decrease_chart, use_container_width=True)
-
-                st.subheader("Najważniejsze zmiany")
-                highlight_table = (
-                    product_summary.assign(Abs_Delta=product_summary["Delta"].abs())
-                    .sort_values("Abs_Delta", ascending=False)
-                    .drop(columns=["Abs_Delta"])
-                    .head(10)
-                )
-                highlight_table["Quantity_Prev"] = highlight_table["Quantity_Prev"].map(
-                    lambda value: f"{value:,.0f}"
-                )
-                highlight_table["Quantity_Curr"] = highlight_table["Quantity_Curr"].map(
-                    lambda value: f"{value:,.0f}"
-                )
-                highlight_table["Delta"] = highlight_table["Delta"].map(format_signed_int)
-                highlight_table = highlight_table.rename(
-                    columns={
-                        "Part Number": "Numer części",
-                        "Part Description": "Opis produktu",
-                        "Quantity_Prev": "Poprzednia ilość",
-                        "Quantity_Curr": "Aktualna ilość",
-                        "Delta": "Zmiana ilości",
-                        "Alert_Count": "Liczba alertów",
-                        "Change Direction": "Kierunek zmiany",
-                    }
-                )
-                st.dataframe(highlight_table, use_container_width=True, height=360)
-
-            with product_tab:
-                st.subheader("Analiza wybranego produktu")
-                selected_product_label = st.selectbox(
-                    "Wybierz produkt",
-                    options=product_summary["Product Label"].tolist(),
-                )
-                product_detail = filtered_df[
-                    filtered_df["Product Label"] == selected_product_label
-                ].sort_values(date_basis)
-                product_date_summary = summarize_dates(product_detail, date_basis)
-
-                product_metrics = st.columns(4)
-                product_metrics[0].metric(
-                    "Poprzednia ilość", f"{product_detail['Quantity_Prev'].sum():,.0f}"
-                )
-                product_metrics[1].metric(
-                    "Aktualna ilość", f"{product_detail['Quantity_Curr'].sum():,.0f}"
-                )
-                product_metrics[2].metric(
-                    "Bilans zmian", f"{product_detail['Delta'].sum():+,.0f}"
-                )
-                product_metrics[3].metric(
-                    "Liczba alertów", int(product_detail["Alert"].sum())
-                )
-
-                st.altair_chart(
-                    build_quantity_chart(product_date_summary, get_date_label(date_basis)), use_container_width=True
-                )
-                st.altair_chart(
-                    build_delta_chart(product_date_summary, get_date_label(date_basis)), use_container_width=True
-                )
-
-                product_table = product_detail[
-                    [
-                        "Part Number",
-                        "Part Description",
-                        "Ship Date",
-                        "Receipt Date",
-                        "Quantity_Prev",
-                        "Quantity_Curr",
-                        "Delta",
-                        "Percent Change",
-                        "Change Direction",
-                        "Alert",
-                    ]
-                ].copy()
-                product_table["Ship Date"] = product_table["Ship Date"].dt.strftime("%Y-%m-%d")
-                product_table["Receipt Date"] = product_table["Receipt Date"].dt.strftime(
-                    "%Y-%m-%d"
-                )
-                product_table["Change Direction"] = product_table["Change Direction"].map(
-                    get_change_label
-                )
-                product_table["Alert"] = product_table["Alert"].map(
-                    lambda value: "Tak" if value else "Nie"
-                )
-                product_table = product_table.rename(
-                    columns={
-                        "Part Number": "Numer części",
-                        "Part Description": "Opis produktu",
-                        "Ship Date": "Data wysyłki",
-                        "Receipt Date": "Data odbioru",
-                        "Quantity_Prev": "Poprzednia ilość",
-                        "Quantity_Curr": "Aktualna ilość",
-                        "Delta": "Zmiana ilości",
-                        "Percent Change": "Zmiana %",
-                        "Change Direction": "Kierunek zmiany",
-                        "Alert": "Alert",
-                    }
-                )
-                st.dataframe(product_table, use_container_width=True, height=360)
-
-            with matrix_tab:
-                st.subheader("Macierz podobna do arkusza release'u")
-                matrix_metric = st.radio(
-                    "Metryka",
-                    options=["Current Quantity", "Previous Quantity", "Delta", "Percent Change"],
-                    horizontal=True,
-                    format_func=get_metric_label,
-                )
-                matrix = build_matrix(filtered_df, date_basis, matrix_metric)
-                matrix_cells = matrix.shape[0] * max(matrix.shape[1], 1)
-
-                if matrix.empty:
-                    st.info("Brak danych do macierzy.")
-                elif matrix_cells <= MAX_MATRIX_STYLE_CELLS:
-                    st.dataframe(
-                        style_matrix(matrix, matrix_metric),
-                        use_container_width=True,
-                        height=520,
-                    )
-                else:
-                    st.info(
-                        "Macierz jest zbyt duza do stylowania, dlatego pokazuje ja "
-                        "bez dodatkowego formatowania."
-                    )
-                    st.dataframe(matrix, use_container_width=True, height=520)
-
-            with detail_tab:
-                st.subheader("Dane szczegółowe")
-                preview_limit = st.selectbox(
-                    "Liczba wierszy w podglądzie",
-                    options=[100, 250, 500, 1000],
-                    index=2,
-                )
-                detail_table = filtered_df[
-                    [
-                        "PO Number",
-                        "Part Number",
-                        "Part Description",
-                        "Ship Date",
-                        "Receipt Date",
-                        "Unit of Measure",
-                        "Quantity_Prev",
-                        "Quantity_Curr",
-                        "Delta",
-                        "Percent Change",
-                        "Change Direction",
-                        "Alert",
-                    ]
-                ].copy()
-                detail_table["Ship Date"] = detail_table["Ship Date"].dt.strftime("%Y-%m-%d")
-                detail_table["Receipt Date"] = detail_table["Receipt Date"].dt.strftime(
-                    "%Y-%m-%d"
-                )
-                detail_table["Change Direction"] = detail_table["Change Direction"].map(
-                    get_change_label
-                )
-                detail_table["Alert"] = detail_table["Alert"].map(
-                    lambda value: "Tak" if value else "Nie"
-                )
-                detail_table = detail_table.rename(
-                    columns={
-                        "PO Number": "Numer PO",
-                        "Part Number": "Numer części",
-                        "Part Description": "Opis produktu",
-                        "Ship Date": "Data wysyłki",
-                        "Receipt Date": "Data odbioru",
-                        "Unit of Measure": "JM",
-                        "Quantity_Prev": "Poprzednia ilość",
-                        "Quantity_Curr": "Aktualna ilość",
-                        "Delta": "Zmiana ilości",
-                        "Percent Change": "Zmiana %",
-                        "Change Direction": "Kierunek zmiany",
-                        "Alert": "Alert",
-                    }
-                )
-
-                if len(detail_table) > preview_limit:
-                    st.info(
-                        f"Pokazuje pierwsze {preview_limit} z {len(detail_table)} wierszy. "
-                        "Pełny raport jest dostępny do pobrania."
-                    )
-                st.dataframe(
-                    detail_table.head(preview_limit),
-                    use_container_width=True,
-                    height=420,
-                )
-
-                current_matrix_for_export = build_matrix(
-                    filtered_df, date_basis, "Current Quantity"
-                )
-                delta_matrix_for_export = build_matrix(filtered_df, date_basis, "Delta")
-                excel_bytes = to_excel_bytes(
-                    filtered_df,
-                    current_matrix_for_export,
-                    delta_matrix_for_export,
-                    prev_meta,
-                    curr_meta,
-                    product_summary,
-                    date_basis,
-                    selected_start_date,
-                    selected_end_date,
-                    key_findings,
-                )
-                csv_bytes = detail_table.to_csv(index=False).encode("utf-8")
-
-                download_left, download_right = st.columns(2)
-                with download_left:
-                    st.download_button(
-                        "Pobierz filtrowane dane CSV",
-                        data=csv_bytes,
-                        file_name="pjoter_development_release_change_filtered.csv",
-                        mime="text/csv",
-                    )
-                with download_right:
-                    st.download_button(
-                        "Pobierz raport Excel",
-                        data=excel_bytes,
-                        file_name="pjoter_development_release_change_report.xlsx",
-                        mime=(
-                            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                        ),
-                    )
