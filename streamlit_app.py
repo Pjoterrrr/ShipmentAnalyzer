@@ -1168,21 +1168,22 @@ def render_sidebar_section(kicker, title, copy):
 
 
 def render_context_bar(items):
-    cards = []
-    for item in items:
-        cards.append(
-            f"""
-            <div class="context-item">
-                <div class="context-item-label">{html.escape(str(item['label']))}</div>
-                <div class="context-item-value">{html.escape(str(item['value']))}</div>
-                <div class="context-item-copy">{html.escape(str(item['copy']))}</div>
-            </div>
-            """
-        )
-    st.markdown(
-        f'<div class="context-grid">{"".join(cards)}</div>',
-        unsafe_allow_html=True,
-    )
+    if not items:
+        return
+
+    columns = st.columns(len(items))
+    for column, item in zip(columns, items):
+        with column:
+            st.markdown(
+                f"""
+                <div class="context-item">
+                    <div class="context-item-label">{html.escape(str(item['label']))}</div>
+                    <div class="context-item-value">{html.escape(str(item['value']))}</div>
+                    <div class="context-item-copy">{html.escape(str(item['copy']))}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
 
 def render_kpi_card(label, value, meta, tone="neutral"):
