@@ -35,6 +35,16 @@ def resolve_runtime_path(relative_path):
 
 LOGO_PATH = resolve_runtime_path(Path("assets") / "logo.png")
 AUTH_USERS_PATH = resolve_runtime_path(Path("config") / "users.json")
+DEFAULT_LOCAL_USERS = [
+    {
+        "username": "Admin",
+        "display_name": "PjoterDev",
+        "role": "Admin",
+        "active": True,
+        "salt": "2dca7cf9f423d3efd485450127c60d11",
+        "password_hash": "8ff0d8d54e61cf684a163ea88eda74a7a1de38098359269a123d6a6c4704146e",
+    }
+]
 REQUIRED_RAW_COLUMNS = [
     "PO Number",
     "PO Line #",
@@ -1326,7 +1336,7 @@ def load_auth_config():
     except Exception:
         pass
 
-    return [], None
+    return DEFAULT_LOCAL_USERS, "wbudowany fallback"
 
 
 def verify_password(password, salt_hex, password_hash_hex):
@@ -1452,10 +1462,8 @@ def render_login_screen():
                 st.success("Logowanie zakończone powodzeniem.")
                 st.rerun()
             st.error("Nieprawidłowy login lub hasło.")
-        if not auth_users:
-            st.warning(
-                "Logowanie nie jest jeszcze skonfigurowane. Lokalnie użyj pliku config/users.json, a na Streamlit dodaj użytkowników w sekcji Secrets."
-            )
+        if auth_users and len(auth_users) == 1 and auth_users[0].get("username") == "Admin":
+            st.info("Aktywne konto startowe: login Admin, hasło Pjoter2026!")
     st.markdown("</div>", unsafe_allow_html=True)
 
 
