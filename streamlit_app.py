@@ -10,6 +10,12 @@ import sys
 import altair as alt
 import pandas as pd
 import streamlit as st
+from analytics_calendar import (
+    build_calendar_frame,
+    build_weekly_summary,
+    classify_polish_day,
+    get_last_completed_reference_week,
+)
 from openpyxl.drawing.image import Image as OpenpyxlImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -1085,6 +1091,188 @@ def summarize_dates(dataframe, date_basis):
     return date_summary
 
 
+def format_percent_display(value):
+    return "Nowy tydzien" if value == "new" else value
+
+
+def format_week_range(start_value, end_value):
+    start_label = pd.Timestamp(start_value).strftime("%Y-%m-%d")
+    end_label = pd.Timestamp(end_value).strftime("%Y-%m-%d")
+    return f"{start_label} - {end_label}"
+
+
+def get_reference_week_rows(weekly_summary):
+    if weekly_summary.empty:
+        return None, None
+
+    reference_rows = weekly_summary[weekly_summary["Is Reference Week"]]
+    if reference_rows.empty:
+        closed_rows = weekly_summary[weekly_summary["Is Closed Week"]]
+        if closed_rows.empty:
+            return None, None
+        reference_rows = closed_rows.tail(1)
+
+    reference_row = reference_rows.iloc[0]
+    previous_rows = weekly_summary[weekly_summary["Week Start"] < reference_row["Week Start"]]
+    previous_row = previous_rows.tail(1).iloc[0] if not previous_rows.empty else None
+    return reference_row, previous_row
+
+
+def prepare_weekly_display_table(weekly_summary):
+    if weekly_summary.empty:
+        return pd.DataFrame()
+
+    weekly_table = weekly_summary[
+        [
+            "Week Label",
+            "Week Start",
+            "Week End",
+            "Week Status",
+            "Working_Days_PL",
+            "Products",
+            "Quantity_Prev",
+            "Quantity_Curr",
+            "Delta",
+            "Release Percent Label",
+            "WoW Delta",
+            "WoW Percent Label",
+            "Avg Current / Working Day",
+            "Any Weekly Alert",
+        ]
+    ].copy()
+    weekly_table["Week Range"] = weekly_table.apply(
+        lambda row: format_week_range(row["Week Start"], row["Week End"]),
+        axis=1,
+    )
+    weekly_table["Release Delta"] = weekly_table["Delta"].map(format_signed_int)
+    weekly_table["WoW Delta"] = weekly_table["WoW Delta"].map(format_signed_int)
+    weekly_table["Previous Release"] = weekly_table["Quantity_Prev"].map(lambda value: f"{value:,.0f}")
+    weekly_table["Current Release"] = weekly_table["Quantity_Curr"].map(lambda value: f"{value:,.0f}")
+    weekly_table["Release Change %"] = weekly_table["Release Percent Label"].map(format_percent_display)
+    weekly_table["WoW Change %"] = weekly_table["WoW Percent Label"].map(format_percent_display)
+    weekly_table["Current / Working Day"] = weekly_table["Avg Current / Working Day"].map(
+        lambda value: "n/a" if pd.isna(value) else f"{float(value):,.2f}"
+    )
+    weekly_table["Alert"] = weekly_table["Any Weekly Alert"].map(lambda value: "Tak" if value else "Nie")
+    return weekly_table[
+        [
+            "Week Label",
+            "Week Range",
+            "Week Status",
+            "Working_Days_PL",
+            "Products",
+            "Previous Release",
+            "Current Release",
+            "Release Delta",
+            "Release Change %",
+            "WoW Delta",
+            "WoW Change %",
+            "Current / Working Day",
+            "Alert",
+        ]
+    ].rename(
+        columns={
+            "Week Label": "Tydzien ISO",
+            "Week Range": "Zakres tygodnia",
+            "Week Status": "Status",
+            "Working_Days_PL": "Dni robocze PL",
+            "Products": "Produkty",
+        }
+    )
+
+
+def build_weekly_quantity_chart(weekly_summary):
+    if weekly_summary.empty:
+        return None
+
+    chart_data = weekly_summary.copy()
+    chart_data["Week Start"] = pd.to_datetime(chart_data["Week Start"])
+    current_area = (
+        alt.Chart(chart_data)
+        .mark_area(color="#5092ff", opacity=0.18, interpolate="monotone")
+        .encode(
+            x=alt.X("Week Start:T", title="Tydzien ISO", axis=alt.Axis(labelAngle=-24, labelLimit=120)),
+            y=alt.Y("Quantity_Curr:Q", title="Wolumen tygodniowy"),
+        )
+    )
+    prev_line = (
+        alt.Chart(chart_data)
+        .mark_line(strokeWidth=2.4, interpolate="monotone", color="#7c93c9", opacity=0.9)
+        .encode(
+            x=alt.X("Week Start:T", title="Tydzien ISO", axis=alt.Axis(labelAngle=-24, labelLimit=120)),
+            y=alt.Y("Quantity_Prev:Q", title="Wolumen tygodniowy"),
+            tooltip=[
+                alt.Tooltip("Week Label:N", title="Tydzien"),
+                alt.Tooltip("Quantity_Prev:Q", title="Poprzedni release", format=",.0f"),
+                alt.Tooltip("Quantity_Curr:Q", title="Aktualny release", format=",.0f"),
+                alt.Tooltip("Delta:Q", title="Delta release", format=",.0f"),
+                alt.Tooltip("Working_Days_PL:Q", title="Dni robocze PL"),
+                alt.Tooltip("Week Status:N", title="Status"),
+            ],
+        )
+    )
+    current_line = (
+        alt.Chart(chart_data)
+        .mark_line(
+            point=alt.OverlayMarkDef(size=90, filled=True, fill="#eef4ff", stroke="#3c78d8", strokeWidth=2.2),
+            strokeWidth=3.4,
+            interpolate="monotone",
+            color="#6cb0ff",
+        )
+        .encode(
+            x=alt.X("Week Start:T", title="Tydzien ISO", axis=alt.Axis(labelAngle=-24, labelLimit=120)),
+            y=alt.Y("Quantity_Curr:Q", title="Wolumen tygodniowy"),
+            tooltip=[
+                alt.Tooltip("Week Label:N", title="Tydzien"),
+                alt.Tooltip("Quantity_Prev:Q", title="Poprzedni release", format=",.0f"),
+                alt.Tooltip("Quantity_Curr:Q", title="Aktualny release", format=",.0f"),
+                alt.Tooltip("Delta:Q", title="Delta release", format=",.0f"),
+                alt.Tooltip("Avg Current / Working Day:Q", title="Na dzien roboczy", format=",.2f"),
+                alt.Tooltip("Week Status:N", title="Status"),
+            ],
+        )
+    )
+    return apply_chart_theme(
+        alt.layer(current_area, prev_line, current_line).properties(height=360)
+    )
+
+
+def build_weekly_delta_chart(weekly_summary):
+    if weekly_summary.empty:
+        return None
+
+    chart_data = weekly_summary.copy()
+    chart_data["Week Start"] = pd.to_datetime(chart_data["Week Start"])
+    chart_data["WoW Color"] = chart_data["WoW Delta"].apply(
+        lambda value: "#43d3b1" if value > 0 else "#ff6f6f" if value < 0 else "#7c93c9"
+    )
+    bars = (
+        alt.Chart(chart_data)
+        .mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6, opacity=0.88)
+        .encode(
+            x=alt.X("Week Start:T", title="Tydzien ISO", axis=alt.Axis(labelAngle=-24, labelLimit=120)),
+            y=alt.Y("WoW Delta:Q", title="Delta WoW"),
+            color=alt.Color("WoW Color:N", scale=None, legend=None),
+            tooltip=[
+                alt.Tooltip("Week Label:N", title="Tydzien"),
+                alt.Tooltip("WoW Delta:Q", title="Zmiana vs poprzedni tydzien", format=",.0f"),
+                alt.Tooltip("WoW Percent Label:N", title="Zmiana WoW %"),
+                alt.Tooltip("Working_Days_PL:Q", title="Dni robocze PL"),
+                alt.Tooltip("Week Status:N", title="Status"),
+            ],
+        )
+    )
+    line = (
+        alt.Chart(chart_data)
+        .mark_line(color="#d7e7ff", strokeWidth=2, opacity=0.55)
+        .encode(
+            x=alt.X("Week Start:T", title="Tydzien ISO", axis=alt.Axis(labelAngle=-24, labelLimit=120)),
+            y=alt.Y("Delta:Q", title="Delta tygodniowa"),
+        )
+    )
+    return apply_chart_theme(alt.layer(bars, line).properties(height=320))
+
+
 def build_quantity_chart(date_summary, x_title):
     chart_data = date_summary.sort_values("Analysis Date").copy()
     latest_point = chart_data.tail(1).copy()
@@ -1561,10 +1749,61 @@ def decorate_delta_column(worksheet, header_row=1):
             delta_cell = worksheet.cell(row=row, column=delta_column)
             if isinstance(delta_cell.value, (int, float)):
                 delta_cell.fill = green_fill if delta_cell.value > 0 else red_fill if delta_cell.value < 0 else blue_fill
+                delta_cell.font = Font(color="000000", bold=False)
         if percent_column is not None:
             percent_cell = worksheet.cell(row=row, column=percent_column)
             if isinstance(percent_cell.value, (int, float)):
                 percent_cell.number_format = '0.0"%"'
+                percent_cell.font = Font(color="000000", bold=False)
+
+
+def excel_fill_color(value, metric_name, max_value, max_abs):
+    if metric_name == "Current Quantity":
+        ratio = 0 if max_value <= 0 else float(value) / max_value
+        return blend_hex("#eff6ff", "#93c5fd", ratio)
+    if metric_name == "Previous Quantity":
+        ratio = 0 if max_value <= 0 else float(value) / max_value
+        return blend_hex("#f8fafc", "#cbd5e1", ratio)
+    ratio = 0 if max_abs <= 0 else abs(float(value)) / max_abs
+    if value > 0:
+        return blend_hex("#f0fdf4", "#86efac", ratio)
+    if value < 0:
+        return blend_hex("#fef2f2", "#fca5a5", ratio)
+    return "#e2e8f0"
+
+
+def ensure_numeric_cells_black(worksheet, start_row=1):
+    for row in worksheet.iter_rows(min_row=start_row, max_row=worksheet.max_row):
+        for cell in row:
+            if isinstance(cell.value, (int, float)) and not isinstance(cell.value, bool):
+                cell.font = Font(color="000000", bold=bool(cell.font.bold))
+
+
+def apply_polish_calendar_highlights(worksheet, date_columns, header_row=1):
+    headers = {cell.value: cell.column for cell in worksheet[header_row]}
+    saturday_fill = PatternFill(fill_type="solid", fgColor="DBEAFE")
+    sunday_fill = PatternFill(fill_type="solid", fgColor="FEE2E2")
+    holiday_fill = PatternFill(fill_type="solid", fgColor="FEF3C7")
+
+    for column_name in date_columns:
+        column_index = headers.get(column_name)
+        if column_index is None:
+            continue
+        for row in range(header_row + 1, worksheet.max_row + 1):
+            cell = worksheet.cell(row=row, column=column_index)
+            if cell.value in (None, ""):
+                continue
+            try:
+                day_info = classify_polish_day(cell.value)
+            except Exception:
+                continue
+            if day_info["Is Holiday"]:
+                cell.fill = holiday_fill
+            elif day_info["Day Type"] == "Saturday":
+                cell.fill = saturday_fill
+            elif day_info["Day Type"] == "Sunday":
+                cell.fill = sunday_fill
+            cell.font = Font(color="000000", bold=bool(cell.font.bold))
 
 
 def style_matrix_sheet(worksheet, metric_name, header_row=1, start_col=2):
@@ -1597,15 +1836,85 @@ def style_matrix_sheet(worksheet, metric_name, header_row=1, start_col=2):
             cell.border = thin_border
             cell.alignment = Alignment(horizontal="center", vertical="center")
             if isinstance(cell.value, (int, float)):
-                fill_css = style_value(cell.value, metric_name, max_value, max_abs)
-                bg = fill_css.split("background-color: ")[1].split(";")[0].replace("#", "")
-                fg = fill_css.split("color: ")[1].split(";")[0].replace("#", "")
+                bg = excel_fill_color(cell.value, metric_name, max_value, max_abs).replace("#", "")
                 cell.fill = PatternFill(fill_type="solid", fgColor=bg)
-                cell.font = Font(color=fg, bold=False)
+                cell.font = Font(color="000000", bold=False)
                 if metric_name == "Percent Change":
                     cell.number_format = '0.0"%"'
                 else:
                     cell.number_format = '#,##0'
+
+
+def highlight_calendar_rows(worksheet, header_row=1):
+    date_column = None
+    for cell in worksheet[header_row]:
+        if cell.value == "Date":
+            date_column = cell.column
+            break
+    if date_column is None:
+        return
+
+    saturday_fill = PatternFill(fill_type="solid", fgColor="DBEAFE")
+    sunday_fill = PatternFill(fill_type="solid", fgColor="FEE2E2")
+    holiday_fill = PatternFill(fill_type="solid", fgColor="FEF3C7")
+
+    for row in range(header_row + 1, worksheet.max_row + 1):
+        date_value = worksheet.cell(row=row, column=date_column).value
+        if not date_value:
+            continue
+        try:
+            day_info = classify_polish_day(date_value)
+        except Exception:
+            continue
+
+        row_fill = None
+        if day_info["Is Holiday"]:
+            row_fill = holiday_fill
+        elif day_info["Day Type"] == "Saturday":
+            row_fill = saturday_fill
+        elif day_info["Day Type"] == "Sunday":
+            row_fill = sunday_fill
+
+        if row_fill is None:
+            continue
+
+        for col in range(1, worksheet.max_column + 1):
+            worksheet.cell(row=row, column=col).fill = row_fill
+
+
+def highlight_weekly_rows(worksheet, header_row=1):
+    headers = {cell.value: cell.column for cell in worksheet[header_row]}
+    status_column = headers.get("Week Status")
+    alert_column = headers.get("Any Weekly Alert")
+    reference_column = headers.get("Is Reference Week")
+    if status_column is None and alert_column is None and reference_column is None:
+        return
+
+    partial_fill = PatternFill(fill_type="solid", fgColor="FEF3C7")
+    open_fill = PatternFill(fill_type="solid", fgColor="FCE7F3")
+    reference_fill = PatternFill(fill_type="solid", fgColor="DBEAFE")
+    alert_fill = PatternFill(fill_type="solid", fgColor="FDECEC")
+
+    for row in range(header_row + 1, worksheet.max_row + 1):
+        status_value = worksheet.cell(row=row, column=status_column).value if status_column else None
+        is_alert = worksheet.cell(row=row, column=alert_column).value if alert_column else False
+        is_reference = worksheet.cell(row=row, column=reference_column).value if reference_column else False
+
+        row_fill = None
+        if bool(is_reference):
+            row_fill = reference_fill
+        elif bool(is_alert):
+            row_fill = alert_fill
+        elif status_value == "Partial range":
+            row_fill = partial_fill
+        elif status_value == "Open week":
+            row_fill = open_fill
+
+        if row_fill is None:
+            continue
+
+        for col in range(1, worksheet.max_column + 1):
+            worksheet.cell(row=row, column=col).fill = row_fill
 
 
 def write_summary_sheet(
@@ -1614,6 +1923,7 @@ def write_summary_sheet(
     curr_meta,
     detail_df,
     product_summary,
+    weekly_summary,
     date_basis,
     selected_start_date,
     selected_end_date,
@@ -1663,6 +1973,29 @@ def write_summary_sheet(
     worksheet["D8"] = "Products Changed"
     worksheet["E8"] = products_changed
 
+    reference_week = get_last_completed_reference_week(selected_end_date)
+    reference_row, previous_row = get_reference_week_rows(weekly_summary)
+    worksheet["D10"] = "Reference Week"
+    worksheet["E10"] = reference_row["Week Label"] if reference_row is not None else reference_week.week_label
+    worksheet["D11"] = "Reference Current Qty"
+    worksheet["E11"] = float(reference_row["Quantity_Curr"]) if reference_row is not None else 0
+    worksheet["D12"] = "Reference Release %"
+    worksheet["E12"] = (
+        format_percent_display(reference_row["Release Percent Label"])
+        if reference_row is not None
+        else "n/a"
+    )
+    worksheet["D13"] = "Reference WoW %"
+    worksheet["E13"] = (
+        format_percent_display(reference_row["WoW Percent Label"])
+        if reference_row is not None
+        else "n/a"
+    )
+    worksheet["D14"] = "Working Days PL"
+    worksheet["E14"] = int(reference_row["Working_Days_PL"]) if reference_row is not None else 0
+    worksheet["D15"] = "Previous Closed Week"
+    worksheet["E15"] = previous_row["Week Label"] if previous_row is not None else "n/a"
+
     worksheet["A13"] = "Key Findings"
     worksheet["A13"].font = Font(size=13, bold=True, color="0F172A")
     for idx, finding in enumerate(key_findings[:4], start=14):
@@ -1703,6 +2036,7 @@ def write_summary_sheet(
 
 def to_excel_bytes(
     detail_df,
+    weekly_summary,
     current_matrix_df,
     delta_matrix_df,
     prev_meta,
@@ -1717,12 +2051,59 @@ def to_excel_bytes(
     detail_export = detail_df.copy()
     detail_export["Ship Date"] = detail_export["Ship Date"].dt.strftime("%Y-%m-%d")
     detail_export["Receipt Date"] = detail_export["Receipt Date"].dt.strftime("%Y-%m-%d")
+    weekly_export = weekly_summary[
+        [
+            "Week Label",
+            "Week Start",
+            "Week End",
+            "Week Status",
+            "Working_Days_PL",
+            "Holidays_PL",
+            "Weekend_Days",
+            "Products",
+            "Quantity_Prev",
+            "Quantity_Curr",
+            "Delta",
+            "Release Percent Label",
+            "Previous Week Current Qty",
+            "WoW Delta",
+            "WoW Percent Label",
+            "Avg Current / Working Day",
+            "Release Alert",
+            "WoW Alert",
+            "Any Weekly Alert",
+            "Is Reference Week",
+        ]
+    ].copy()
+    weekly_export["Week Start"] = pd.to_datetime(weekly_export["Week Start"]).dt.strftime("%Y-%m-%d")
+    weekly_export["Week End"] = pd.to_datetime(weekly_export["Week End"]).dt.strftime("%Y-%m-%d")
+    weekly_export["Release Percent Label"] = weekly_export["Release Percent Label"].map(format_percent_display)
+    weekly_export["WoW Percent Label"] = weekly_export["WoW Percent Label"].map(format_percent_display)
+    weekly_export = weekly_export.rename(
+        columns={
+            "Working_Days_PL": "Working Days PL",
+            "Holidays_PL": "Polish Holidays",
+            "Weekend_Days": "Weekend Days",
+            "Quantity_Prev": "Previous Release Qty",
+            "Quantity_Curr": "Current Release Qty",
+            "Release Percent Label": "Release Change %",
+            "Previous Week Current Qty": "Previous Week Current Qty",
+            "WoW Percent Label": "WoW Change %",
+            "Avg Current / Working Day": "Current / Working Day",
+        }
+    )
+    calendar_export = build_calendar_frame(selected_start_date, selected_end_date).copy()
+    calendar_export["Date"] = pd.to_datetime(calendar_export["Date"]).dt.strftime("%Y-%m-%d")
+    calendar_export["Week Start"] = pd.to_datetime(calendar_export["Week Start"]).dt.strftime("%Y-%m-%d")
+    calendar_export["Week End"] = pd.to_datetime(calendar_export["Week End"]).dt.strftime("%Y-%m-%d")
     current_matrix_export = current_matrix_df.reset_index()
     delta_matrix_export = delta_matrix_df.reset_index()
 
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         pd.DataFrame().to_excel(writer, sheet_name="Executive Summary", index=False)
         detail_export.to_excel(writer, sheet_name="Detailed Data", index=False)
+        weekly_export.to_excel(writer, sheet_name="Weekly Summary", index=False)
+        calendar_export.to_excel(writer, sheet_name="Calendar PL", index=False)
         current_matrix_export.to_excel(writer, sheet_name="Current Matrix", index=False)
         delta_matrix_export.to_excel(writer, sheet_name="Delta Heatmap", index=False)
 
@@ -1733,6 +2114,7 @@ def to_excel_bytes(
             curr_meta,
             detail_df,
             product_summary,
+            weekly_summary,
             date_basis,
             selected_start_date,
             selected_end_date,
@@ -1742,20 +2124,42 @@ def to_excel_bytes(
         detail_sheet = writer.book["Detailed Data"]
         style_excel_header(detail_sheet, 1)
         decorate_delta_column(detail_sheet, header_row=1)
+        apply_polish_calendar_highlights(detail_sheet, ["Ship Date", "Receipt Date"], header_row=1)
         detail_sheet.freeze_panes = "A2"
         autosize_worksheet(detail_sheet)
+        ensure_numeric_cells_black(detail_sheet, start_row=2)
+
+        weekly_sheet = writer.book["Weekly Summary"]
+        style_excel_header(weekly_sheet, 1)
+        highlight_weekly_rows(weekly_sheet, header_row=1)
+        decorate_delta_column(weekly_sheet, header_row=1)
+        weekly_sheet.freeze_panes = "A2"
+        autosize_worksheet(weekly_sheet)
+        ensure_numeric_cells_black(weekly_sheet, start_row=2)
+
+        calendar_sheet = writer.book["Calendar PL"]
+        style_excel_header(calendar_sheet, 1)
+        highlight_calendar_rows(calendar_sheet, header_row=1)
+        apply_polish_calendar_highlights(calendar_sheet, ["Date"], header_row=1)
+        calendar_sheet.freeze_panes = "A2"
+        autosize_worksheet(calendar_sheet)
+        ensure_numeric_cells_black(calendar_sheet, start_row=2)
 
         current_matrix_sheet = writer.book["Current Matrix"]
         style_excel_header(current_matrix_sheet, 1)
         current_matrix_sheet.freeze_panes = "B2"
         autosize_worksheet(current_matrix_sheet)
         style_matrix_sheet(current_matrix_sheet, "Current Quantity")
+        ensure_numeric_cells_black(current_matrix_sheet, start_row=2)
 
         delta_heatmap_sheet = writer.book["Delta Heatmap"]
         style_excel_header(delta_heatmap_sheet, 1)
         delta_heatmap_sheet.freeze_panes = "B2"
         autosize_worksheet(delta_heatmap_sheet)
         style_matrix_sheet(delta_heatmap_sheet, "Delta")
+        ensure_numeric_cells_black(delta_heatmap_sheet, start_row=2)
+
+        ensure_numeric_cells_black(summary_sheet, start_row=1)
 
     return output.getvalue()
 
@@ -1856,11 +2260,14 @@ else:
         selected_start_date, selected_end_date = normalize_date_selection(
             selected_date_input, min_date, max_date
         )
+        swapped_dates = selected_start_date > selected_end_date
         if selected_start_date > selected_end_date:
             selected_start_date, selected_end_date = (
                 selected_end_date,
                 selected_start_date,
             )
+        if swapped_dates:
+            st.sidebar.warning("Zamieniono kolejnosc dat, aby zachowac poprawny zakres analizy.")
         
         # Wyświetl wybrany zakres
         st.sidebar.caption(f"Zakres: {selected_start_date.strftime('%Y-%m-%d')} → {selected_end_date.strftime('%Y-%m-%d')}")
@@ -1911,6 +2318,14 @@ else:
 
         product_summary = summarize_products(filtered_df)
         date_summary = summarize_dates(filtered_df, date_basis)
+        weekly_summary = build_weekly_summary(
+            filtered_df,
+            date_basis,
+            selected_start_date,
+            selected_end_date,
+            selected_end_date,
+            THRESHOLD,
+        )
         key_findings = build_key_findings(
             filtered_df, product_summary, date_summary, date_basis
         )
@@ -2028,6 +2443,81 @@ else:
             )
             metric_cols[4].metric("Zmienne produkty", f"{products_changed:,}")
 
+            reference_week = get_last_completed_reference_week(selected_end_date)
+            reference_row, previous_week_row = get_reference_week_rows(weekly_summary)
+            reference_week_label = (
+                reference_row["Week Label"] if reference_row is not None else reference_week.week_label
+            )
+            reference_range_label = (
+                format_week_range(reference_row["Week Start"], reference_row["Week End"])
+                if reference_row is not None
+                else format_week_range(reference_week.week_start, reference_week.week_end)
+            )
+            reference_release_delta = (
+                format_signed_int(reference_row["Delta"]) if reference_row is not None else "+0"
+            )
+            reference_release_pct = (
+                format_percent_display(reference_row["Release Percent Label"])
+                if reference_row is not None
+                else "n/a"
+            )
+            reference_wow_delta = (
+                format_signed_int(reference_row["WoW Delta"]) if reference_row is not None else "+0"
+            )
+            reference_wow_pct = (
+                format_percent_display(reference_row["WoW Percent Label"])
+                if reference_row is not None
+                else "n/a"
+            )
+            reference_working_days = (
+                int(reference_row["Working_Days_PL"]) if reference_row is not None else 0
+            )
+            reference_per_day = (
+                "n/a"
+                if reference_row is None or pd.isna(reference_row["Avg Current / Working Day"])
+                else f"{float(reference_row['Avg Current / Working Day']):,.2f} / dzien"
+            )
+            previous_week_label = (
+                previous_week_row["Week Label"] if previous_week_row is not None else "brak"
+            )
+
+            st.caption(
+                f"Analiza tygodniowa odnosi sie do {reference_week_label} ({reference_range_label}). "
+                f"Data referencyjna: {selected_end_date:%Y-%m-%d}. "
+                + (
+                    "Poniewaz data koncowa wypada w trakcie tygodnia, jako referencje przyjeto ostatni pelny zakonczony tydzien ISO."
+                    if selected_end_date.weekday() != 6
+                    else "Poniewaz data koncowa wypada w niedziele, ten tydzien zostal uznany za pelny zakonczony tydzien ISO."
+                )
+            )
+
+            weekly_metric_cols = st.columns(5)
+            weekly_metric_cols[0].metric(
+                "Referencyjny tydzien ISO",
+                reference_week_label,
+                delta=reference_range_label,
+            )
+            weekly_metric_cols[1].metric(
+                "Aktualny wolumen tygodnia",
+                f"{float(reference_row['Quantity_Curr']):,.0f}" if reference_row is not None else "0",
+                delta=reference_release_delta,
+            )
+            weekly_metric_cols[2].metric(
+                "Zmiana vs poprzedni release",
+                reference_release_pct,
+                delta=f"prev {float(reference_row['Quantity_Prev']):,.0f}" if reference_row is not None else "prev 0",
+            )
+            weekly_metric_cols[3].metric(
+                "Zmiana WoW",
+                reference_wow_delta,
+                delta=f"{reference_wow_pct} vs {previous_week_label}",
+            )
+            weekly_metric_cols[4].metric(
+                "Dni robocze PL",
+                f"{reference_working_days}",
+                delta=reference_per_day,
+            )
+
             st.markdown(
                 """
                 <div class="section-banner">
@@ -2048,8 +2538,8 @@ else:
                         finding["label"], finding["title"], finding["copy"]
                     )
 
-            dashboard_tab, product_tab, matrix_tab, detail_tab = st.tabs(
-                ["Dashboard", "Raport produktu", "Macierz release'u", "Dane szczegółowe"]
+            dashboard_tab, weekly_tab, product_tab, matrix_tab, detail_tab = st.tabs(
+                ["Dashboard", "Analiza tygodniowa", "Raport produktu", "Macierz release'u", "Dane szczegółowe"]
             )
 
             with dashboard_tab:
@@ -2120,6 +2610,97 @@ else:
                 )
                 st.dataframe(highlight_table, use_container_width=True, height=360)
 
+                st.subheader("Tygodnie ISO")
+                weekly_chart = build_weekly_quantity_chart(weekly_summary)
+                if weekly_chart is not None:
+                    st.altair_chart(weekly_chart, use_container_width=True)
+                weekly_preview = prepare_weekly_display_table(weekly_summary).tail(8)
+                st.dataframe(weekly_preview, use_container_width=True, height=320)
+
+            with weekly_tab:
+                st.subheader("Analiza tygodniowa oparta na datach")
+                weekly_partial = weekly_summary[
+                    weekly_summary["Is Partial Range"] | ~weekly_summary["Is Closed Week"]
+                ]
+                if not weekly_partial.empty:
+                    st.info(
+                        "W tabeli i wykresach tygodnie oznaczone jako 'Partial range' lub 'Open week' "
+                        "obejmują niepełny zakres albo nie były jeszcze zakończone względem daty referencyjnej."
+                    )
+
+                weekly_qty_chart = build_weekly_quantity_chart(weekly_summary)
+                if weekly_qty_chart is not None:
+                    st.altair_chart(weekly_qty_chart, use_container_width=True)
+
+                weekly_left, weekly_right = st.columns([1.3, 1], gap="large")
+                with weekly_left:
+                    weekly_delta_chart = build_weekly_delta_chart(weekly_summary)
+                    if weekly_delta_chart is not None:
+                        st.altair_chart(weekly_delta_chart, use_container_width=True)
+                with weekly_right:
+                    weekly_focus = pd.DataFrame(
+                        [
+                            {
+                                "Widok": "Referencyjny tydzien",
+                                "Tydzien ISO": reference_week_label,
+                                "Aktualny release": (
+                                    f"{float(reference_row['Quantity_Curr']):,.0f}"
+                                    if reference_row is not None
+                                    else "0"
+                                ),
+                                "Poprzedni release": (
+                                    f"{float(reference_row['Quantity_Prev']):,.0f}"
+                                    if reference_row is not None
+                                    else "0"
+                                ),
+                                "Delta release": reference_release_delta,
+                                "Zmiana release %": reference_release_pct,
+                                "Delta WoW": reference_wow_delta,
+                                "Zmiana WoW %": reference_wow_pct,
+                            },
+                            {
+                                "Widok": "Poprzedni tydzien",
+                                "Tydzien ISO": previous_week_label,
+                                "Aktualny release": (
+                                    f"{float(previous_week_row['Quantity_Curr']):,.0f}"
+                                    if previous_week_row is not None
+                                    else "0"
+                                ),
+                                "Poprzedni release": (
+                                    f"{float(previous_week_row['Quantity_Prev']):,.0f}"
+                                    if previous_week_row is not None
+                                    else "0"
+                                ),
+                                "Delta release": (
+                                    format_signed_int(previous_week_row["Delta"])
+                                    if previous_week_row is not None
+                                    else "+0"
+                                ),
+                                "Zmiana release %": (
+                                    format_percent_display(previous_week_row["Release Percent Label"])
+                                    if previous_week_row is not None
+                                    else "n/a"
+                                ),
+                                "Delta WoW": (
+                                    format_signed_int(previous_week_row["WoW Delta"])
+                                    if previous_week_row is not None
+                                    else "+0"
+                                ),
+                                "Zmiana WoW %": (
+                                    format_percent_display(previous_week_row["WoW Percent Label"])
+                                    if previous_week_row is not None
+                                    else "n/a"
+                                ),
+                            },
+                        ]
+                    )
+                    st.subheader("Porównanie tygodni")
+                    st.dataframe(weekly_focus, use_container_width=True, height=240)
+
+                weekly_table = prepare_weekly_display_table(weekly_summary)
+                st.subheader("Tabela tygodniowa")
+                st.dataframe(weekly_table, use_container_width=True, height=420)
+
             with product_tab:
                 st.subheader("Analiza wybranego produktu")
                 selected_product_label = st.selectbox(
@@ -2150,6 +2731,24 @@ else:
                 )
                 st.altair_chart(
                     build_delta_chart(product_date_summary, get_date_label(date_basis)), use_container_width=True
+                )
+
+                product_weekly_summary = build_weekly_summary(
+                    product_detail,
+                    date_basis,
+                    selected_start_date,
+                    selected_end_date,
+                    selected_end_date,
+                    THRESHOLD,
+                )
+                st.subheader("Tygodnie ISO dla produktu")
+                product_weekly_chart = build_weekly_quantity_chart(product_weekly_summary)
+                if product_weekly_chart is not None:
+                    st.altair_chart(product_weekly_chart, use_container_width=True)
+                st.dataframe(
+                    prepare_weekly_display_table(product_weekly_summary),
+                    use_container_width=True,
+                    height=280,
                 )
 
                 product_table = product_detail[
@@ -2285,6 +2884,7 @@ else:
                 delta_matrix_for_export = build_matrix(filtered_df, date_basis, "Delta")
                 excel_bytes = to_excel_bytes(
                     filtered_df,
+                    weekly_summary,
                     current_matrix_for_export,
                     delta_matrix_for_export,
                     prev_meta,
