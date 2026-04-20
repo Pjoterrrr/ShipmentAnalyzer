@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120" role="img" aria-label="Mercedes">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#0e1724"/>
+      <stop offset="100%" stop-color="#121d2d"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="120" rx="24" fill="url(#bg)"/>
+  <circle cx="62" cy="60" r="34" fill="none" stroke="#d7e7ff" stroke-width="4"/>
+  <path d="M62 27 L62 94 M62 60 L34 76 M62 60 L90 76" fill="none" stroke="#d7e7ff" stroke-width="4" stroke-linecap="round"/>
+  <text x="118" y="54" fill="#f5f7fb" font-family="Segoe UI, Arial, sans-serif" font-size="20" font-weight="700">Mercedes</text>
+  <text x="118" y="79" fill="#9fb2ca" font-family="Segoe UI, Arial, sans-serif" font-size="13">VL10E / Merc format</text>
+</svg>
