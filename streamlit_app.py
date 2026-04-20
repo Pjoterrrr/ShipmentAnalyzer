@@ -66,7 +66,7 @@ VIEW_MODE_LABELS = {
 st.set_page_config(
     page_title="Pjoter Development | Analiza zamówień i wysyłek",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 st.markdown(
     """
@@ -110,25 +110,7 @@ st.markdown(
         max-width: 1540px;
     }
     section[data-testid="stSidebar"] {
-        border-right: 1px solid var(--line);
-        background:
-            linear-gradient(180deg, rgba(6,10,16,0.98), rgba(10,15,24,0.96)),
-            radial-gradient(circle at top, rgba(76, 201, 240, 0.08), transparent 26%);
-        backdrop-filter: blur(18px);
-        min-width: 21rem !important;
-        max-width: 21rem !important;
-    }
-    /* Keep the filter panel visible and remove the built-in collapse affordances. */
-    section[data-testid="stSidebar"][aria-expanded="false"] {
-        min-width: 21rem !important;
-        max-width: 21rem !important;
-        transform: translateX(0) !important;
-        margin-left: 0 !important;
-    }
-    section[data-testid="stSidebar"][aria-expanded="false"] > div {
-        width: 21rem !important;
-        min-width: 21rem !important;
-        max-width: 21rem !important;
+        display: none !important;
     }
     [data-testid="collapsedControl"],
     [data-testid="stSidebarCollapseButton"],
@@ -136,16 +118,48 @@ st.markdown(
     button[aria-label="Open sidebar"] {
         display: none !important;
     }
-    section[data-testid="stSidebar"] .stRadio > label,
-    section[data-testid="stSidebar"] .stMultiSelect label,
-    section[data-testid="stSidebar"] .stTextInput label,
-    section[data-testid="stSidebar"] .stDateInput label {
+    .filter-panel-shell {
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        padding: 1rem 1rem 1.1rem 1rem;
+        background:
+            linear-gradient(180deg, rgba(6,10,16,0.98), rgba(10,15,24,0.96)),
+            radial-gradient(circle at top, rgba(76, 201, 240, 0.08), transparent 26%);
+        backdrop-filter: blur(18px);
+        box-shadow: var(--shadow-lg);
+        position: sticky;
+        top: 1rem;
+    }
+    .filter-panel-kicker {
+        font-size: 0.74rem;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: var(--steel);
+        font-weight: 800;
+        margin-bottom: 0.35rem;
+    }
+    .filter-panel-title {
+        color: var(--ink);
+        font-size: 1.15rem;
+        font-weight: 800;
+        margin-bottom: 0.3rem;
+    }
+    .filter-panel-copy {
+        color: var(--slate);
+        font-size: 0.88rem;
+        line-height: 1.6;
+        margin-bottom: 0.8rem;
+    }
+    .filter-panel-shell .stRadio > label,
+    .filter-panel-shell .stMultiSelect label,
+    .filter-panel-shell .stTextInput label,
+    .filter-panel-shell .stDateInput label {
         color: var(--ink);
         font-weight: 700;
         letter-spacing: 0.01em;
     }
-    section[data-testid="stSidebar"] h2,
-    section[data-testid="stSidebar"] h3 {
+    .filter-panel-shell h2,
+    .filter-panel-shell h3 {
         color: var(--ink);
     }
     div[data-testid="stMetric"] {
@@ -929,6 +943,22 @@ def _legacy_render_sidebar_user():
         st.rerun()
 
 
+def render_filter_panel_shell():
+    st.markdown(
+        """
+        <div class="filter-panel-shell">
+            <div class="filter-panel-kicker">Panel Nawigacji</div>
+            <div class="filter-panel-title">Filtry i kontekst analizy</div>
+            <div class="filter-panel-copy">
+                Ten panel pozostaje stale widoczny, aby filtrowanie, kalendarz i kontrola zakresu
+                były zawsze pod ręką podczas pracy z dashboardem.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_login_screen():
     st.markdown('<div class="login-shell">', unsafe_allow_html=True)
     left_col, right_col = st.columns([1.18, 0.92], gap="large")
@@ -1005,9 +1035,9 @@ def logo_data_uri():
     return f"data:image/png;base64,{encoded}"
 
 
-def render_sidebar_user():
+def render_sidebar_user(target=st.sidebar):
     auth_user = st.session_state.get("auth_user") or {}
-    st.sidebar.markdown(
+    target.markdown(
         f"""
         <div class="sidebar-user-card">
             <div class="sidebar-user-label">Aktywna sesja</div>
@@ -1017,7 +1047,7 @@ def render_sidebar_user():
         """,
         unsafe_allow_html=True,
     )
-    if st.sidebar.button("Wyloguj", use_container_width=True):
+    if target.button("Wyloguj", use_container_width=True):
         logout_user()
         st.rerun()
 
@@ -1078,6 +1108,74 @@ def normalize_date_selection(selection, default_start, default_end):
     if len(values) == 1:
         return values[0], values[0]
     return values[0], values[1]
+
+
+def render_filter_controls(result):
+    render_filter_panel_shell()
+    if logo_available():
+        st.image(str(LOGO_PATH), use_container_width=True)
+
+    st.markdown("### Filtry")
+    date_basis = st.radio(
+        "Oś dat",
+        DATE_OPTIONS,
+        index=0,
+        format_func=get_date_label,
+    )
+
+    available_dates = result[date_basis].dropna().sort_values()
+    min_date = available_dates.min().date()
+    max_date = available_dates.max().date()
+
+    st.markdown("---")
+    st.markdown("##### Zakres czasowy")
+    selected_date_input = st.date_input(
+        "Wybierz przedział dat:",
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date,
+        help="Kliknij, aby wybrać pojedynczy dzień lub zakres dat do analizy.",
+        label_visibility="collapsed",
+    )
+    selected_start_date, selected_end_date = normalize_date_selection(
+        selected_date_input, min_date, max_date
+    )
+    swapped_dates = selected_start_date > selected_end_date
+    if swapped_dates:
+        selected_start_date, selected_end_date = selected_end_date, selected_start_date
+        st.warning("Zamieniono kolejność dat, aby zachować poprawny zakres analizy.")
+
+    st.caption(
+        f"Zakres: {selected_start_date.strftime('%Y-%m-%d')} → {selected_end_date.strftime('%Y-%m-%d')}"
+    )
+    st.markdown("---")
+
+    full_product_summary = summarize_products(result)
+    all_products = full_product_summary["Product Label"].tolist()
+    selected_products = st.multiselect(
+        "Produkty",
+        options=all_products,
+        default=all_products,
+    )
+    search_term = st.text_input("Szukaj po numerze lub opisie")
+    selected_change_directions = st.multiselect(
+        "Kierunek zmiany",
+        options=["Increase", "Decrease", "No Change"],
+        default=["Increase", "Decrease", "No Change"],
+        format_func=get_change_label,
+    )
+    only_alerts = st.checkbox(f"Tylko alerty >= {THRESHOLD}%")
+
+    return {
+        "date_basis": date_basis,
+        "selected_start_date": selected_start_date,
+        "selected_end_date": selected_end_date,
+        "selected_products": selected_products,
+        "search_term": search_term,
+        "selected_change_directions": selected_change_directions,
+        "only_alerts": only_alerts,
+        "full_product_summary": full_product_summary,
+    }
 
 
 @st.cache_data(show_spinner=False)
@@ -2219,7 +2317,7 @@ if not st.session_state["authenticated"]:
     render_login_screen()
     st.stop()
 
-render_sidebar_user()
+render_sidebar_user(st)
 
 upload_left, upload_right = st.columns(2, gap="large")
 with upload_left:
@@ -2279,65 +2377,19 @@ else:
     except Exception as exc:
         st.error(f"Błąd: {exc}")
     else:
-        st.sidebar.header("Filtry")
-        if logo_available():
-            st.sidebar.image(str(LOGO_PATH), use_container_width=True)
-        
-        # Oś dat
-        date_basis = st.sidebar.radio(
-            "Oś dat",
-            DATE_OPTIONS,
-            index=0,
-            format_func=get_date_label,
-        )
+        filter_col, _ = st.columns([0.32, 0.68], gap="large")
+        with filter_col:
+            filter_state = render_filter_controls(result)
 
-        # Zakres dat (kalendarz)
-        available_dates = result[date_basis].dropna().sort_values()
-        min_date = available_dates.min().date()
-        max_date = available_dates.max().date()
-        
-        st.sidebar.markdown("---")
-        st.sidebar.markdown("##### 📅 Zakres czasowy")
-        selected_date_input = st.sidebar.date_input(
-            "Wybierz przedział dat:",
-            value=(min_date, max_date),
-            min_value=min_date,
-            max_value=max_date,
-            help="Kliknij, aby wybrać pojedynczy dzień lub zakres dat do analizy.",
-            label_visibility="collapsed",
-        )
-        selected_start_date, selected_end_date = normalize_date_selection(
-            selected_date_input, min_date, max_date
-        )
-        swapped_dates = selected_start_date > selected_end_date
-        if selected_start_date > selected_end_date:
-            selected_start_date, selected_end_date = (
-                selected_end_date,
-                selected_start_date,
-            )
-        if swapped_dates:
-            st.sidebar.warning("Zamieniono kolejnosc dat, aby zachowac poprawny zakres analizy.")
-        
-        # Wyświetl wybrany zakres
-        st.sidebar.caption(f"Zakres: {selected_start_date.strftime('%Y-%m-%d')} → {selected_end_date.strftime('%Y-%m-%d')}")
-        st.sidebar.markdown("---")
-
-        # Pozostałe filtry
-        full_product_summary = summarize_products(result)
+        date_basis = filter_state["date_basis"]
+        selected_start_date = filter_state["selected_start_date"]
+        selected_end_date = filter_state["selected_end_date"]
+        full_product_summary = filter_state["full_product_summary"]
         all_products = full_product_summary["Product Label"].tolist()
-        selected_products = st.sidebar.multiselect(
-            "Produkty",
-            options=all_products,
-            default=all_products,
-        )
-        search_term = st.sidebar.text_input("Szukaj po numerze lub opisie")
-        selected_change_directions = st.sidebar.multiselect(
-            "Kierunek zmiany",
-            options=["Increase", "Decrease", "No Change"],
-            default=["Increase", "Decrease", "No Change"],
-            format_func=get_change_label,
-        )
-        only_alerts = st.sidebar.checkbox(f"Tylko alerty >= {THRESHOLD}%")
+        selected_products = filter_state["selected_products"]
+        search_term = filter_state["search_term"]
+        selected_change_directions = filter_state["selected_change_directions"]
+        only_alerts = filter_state["only_alerts"]
 
         filtered_df = result.copy()
         filtered_df = filtered_df[
