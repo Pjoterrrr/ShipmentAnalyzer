@@ -1,144 +1,146 @@
-# Pjoter Development | Web App do analizy zamowien i wysylek
+# Shipment Analyzer
 
-Nowoczesna aplikacja webowa w `Streamlit`, ktora porownuje poprzedni i aktualny release klienta, pokazuje wzrosty, spadki, alerty oraz generuje czytelny raport Excel.
+Streamlit application for comparing two Excel snapshots of demand and shipment data, highlighting changes, aggregating weekly quantities, and exporting a business-ready Excel report.
 
-## Co potrafi aplikacja
+The application supports both input formats:
 
-- porownuje dwa pliki Excel
-- analizuje zmiany po `Ship Date` i `Receipt Date`
-- ma kalendarz zakresu dat, ktory odswieza dashboard, tabele, wykresy i eksport
-- wylicza tygodnie ISO (`YYYY-Www`) oraz ostatni pelny zakonczony tydzien referencyjny
-- pokazuje agregacje tygodniowe, porownanie poprzedni release vs aktualny release i zmiane tydzien do tygodnia
-- liczy dni robocze tylko wedlug kalendarza polskiego: bez sobot, niedziel i polskich swiat ustawowych
-- pokazuje `Previous Qty`, `Current Qty`, `Delta` i `Percent Change`
-- oznacza alerty dla zmian przekraczajacych prog `15%`
-- prezentuje dane jako premium dashboard z KPI, wykresami, tabelami i macierza
-- pozwala pobrac filtrowane dane jako CSV
-- generuje biznesowy raport Excel z dodatkowymi arkuszami `Weekly Summary` i `Calendar PL`
-- posiada ekran logowania z lokalna konfiguracja uzytkownikow
-- moze zostac spakowana do uruchamianej paczki `.exe`
+- legacy wide format with release data in a `Raw` sheet
+- newer VL10E-style block format, even when a `Raw` sheet is not present
 
-## Logowanie
+## Quick Start
 
-Aplikacja ma wbudowany ekran logowania.
+### Requirements
 
-Plik uzytkownikow:
+- Python 3.11+
+- `pip`
 
-```text
-config/users.json
-```
-
-Domyslne konto startowe:
-
-- login: `admin`
-- haslo: `Pjoter2026!`
-
-Po pierwszym uruchomieniu zmien te dane w `config/users.json`.
-W wersji EXE najwygodniej edytowac:
-
-```text
-dist\ShipmentAnalyzerWeb\config\users.json
-```
-
-Hasla sa przechowywane jako hash `PBKDF2-SHA256`.
-
-## Jak uruchomic lokalnie
-
-Najprostsza opcja:
-
-1. skopiuj caly folder projektu na komputer docelowy
-2. kliknij dwukrotnie [run_web_app.bat](X:\CodeX - aplikacja analityczna\run_web_app.bat)
-
-Skrypt:
-
-- utworzy lokalne srodowisko `.venv`
-- zainstaluje wymagane biblioteki
-- uruchomi aplikacje pod lokalnym adresem `http://localhost:8501`
-
-## Jak otworzyc na innym komputerze w tej samej sieci
-
-Uzyj [run_web_app_lan.bat](X:\CodeX - aplikacja analityczna\run_web_app_lan.bat).
-
-Ta wersja uruchamia aplikacje na:
-
-```text
-http://0.0.0.0:8501
-```
-
-Nastepnie na drugim komputerze otwierasz:
-
-```text
-http://IP_KOMPUTERA_HOSTA:8501
-```
-
-Przyklad:
-
-```text
-http://192.168.0.25:8501
-```
-
-## Wymagania
-
-- Windows
-- Python 3.11+ zainstalowany i dostepny jako `py` lub `python`
-- polaczenie z internetem przy pierwszym uruchomieniu, aby pobrac zaleznosci
-
-## Reczne uruchomienie
+### Run locally
 
 ```powershell
+python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-python -m streamlit run app.py
+streamlit run streamlit_app.py
 ```
 
-## Wdrożenie na GitHub / Streamlit Cloud
+The app will be available at [http://localhost:8501](http://localhost:8501).
 
-Aby mieć poprawną wersję w GitHub i na Streamlit Cloud, repozytorium musi zawierać plik `app.py` oraz `requirements.txt` w katalogu głównym.
-
-`app.py` jest lekkim wrapperem dla `streamlit_app.py`, dzieki czemu Streamlit Cloud moze uruchamiac aplikacje standardowym entrypointem bez duplikowania logiki.
-
-1. Wypchnij kod do repozytorium GitHub, np. `https://github.com/Pjoterrrr/ShipmentAnalyzer`.
-2. Skonfiguruj Streamlit Cloud, wybierając to repo i gałąź `main`.
-3. W Streamlit Cloud jako entrypoint użyj:
+## Project Structure
 
 ```text
-app.py
+.
+|-- .streamlit/
+|   `-- config.toml
+|-- assets/
+|   |-- icon.ico
+|   `-- logo.png
+|-- config/
+|   `-- users.json
+|-- tests/
+|   |-- test_analytics_calendar.py
+|   |-- test_excel_export.py
+|   `-- test_release_loader.py
+|-- analytics_calendar.py
+|-- app.py
+|-- release_loader.py
+|-- requirements.txt
+|-- run_web_app.bat
+|-- run_web_app_lan.bat
+`-- streamlit_app.py
 ```
 
-Po wdrożeniu aplikacja powinna być dostępna pod adresem Streamlit Cloud lub pod własną domeną przypisaną w panelu Streamlit.
+## Main Entry Point
 
-> Lokalnie aplikacja działa pod `http://localhost:8501`, a na LAN pod `http://0.0.0.0:8501` przy użyciu `run_web_app_lan.bat`.
+The main Streamlit entry point is:
 
-## Budowanie paczki EXE
+```text
+streamlit_app.py
+```
 
-W projekcie jest przygotowany launcher:
-
-- [launcher.py](X:\CodeX - aplikacja analityczna\launcher.py:1)
-
-oraz build pod PyInstaller:
-
-- [ShipmentAnalyzerWeb.spec](X:\CodeX - aplikacja analityczna\ShipmentAnalyzerWeb.spec:1)
-- [build_exe_webapp.bat](X:\CodeX - aplikacja analityczna\build_exe_webapp.bat:1)
-
-Budowanie:
+Start the app with:
 
 ```powershell
-& "X:\CodeX - aplikacja analityczna\build_exe_webapp.bat"
+streamlit run streamlit_app.py
 ```
 
-Po zbudowaniu gotowa paczka pojawi sie w:
+`app.py` remains in the repository only as a lightweight compatibility wrapper.
 
-```text
-dist\ShipmentAnalyzerWeb\
+## Features
+
+- compare previous and current Excel files
+- support legacy release format and VL10E-style format
+- weekly aggregation by ISO week
+- percentage change and deviation highlighting
+- charts and dashboard views
+- CSV download and Excel export
+- local login based on `config/users.json`
+
+## Configuration
+
+### Streamlit config
+
+The repository already includes `.streamlit/config.toml` for local and cloud-friendly Streamlit settings.
+
+### Login config
+
+Local authentication is stored in `config/users.json`.
+
+Before publishing a public repository or deploying for shared use:
+
+1. review the file content
+2. replace any temporary or local-only user entries
+3. avoid committing real personal credentials
+
+The repository should contain only hashed passwords, never plaintext passwords or tokens.
+
+## Publish to GitHub
+
+1. Create an empty repository on GitHub.
+2. From the project root, run:
+
+```powershell
+git init
+git add .
+git commit -m "Prepare Streamlit app for GitHub and deployment"
+git branch -M main
+git remote add origin https://github.com/<your-username>/<your-repository>.git
+git push -u origin main
 ```
 
-W srodku znajdziesz plik `ShipmentAnalyzerWeb.exe`, ktory uruchamia aplikacje lokalnie i otwiera ja w przegladarce.
+## Deployment on Streamlit Community Cloud
 
-Skrypt buduje EXE na lokalnym dysku tymczasowym Windows i dopiero potem kopiuje wynik do `dist\ShipmentAnalyzerWeb`, co omija problemy z pakowaniem bezposrednio na dysku `X:`.
+### What to configure
 
-## Ważne
+- Repository: your GitHub repository, for example `your-username/shipment-analyzer`
+- Branch: `main`
+- Main file path: `streamlit_app.py`
 
-- logo aplikacji jest zapisane lokalnie w `assets/logo.png`, wiec projekt nie zalezy juz od prywatnej sciezki systemowej
-- ikona launchera EXE jest zapisana w `assets/icon.ico`
-- konfiguracja Streamlit znajduje sie w `.streamlit/config.toml`
-- konfiguracja logowania znajduje sie w `config/users.json`
-- jesli chcesz przeniesc aplikacje na inny komputer, kopiuj caly katalog razem z `assets`, `.streamlit` i `config`
+### Steps
+
+1. Push the repository to GitHub.
+2. Open [Streamlit Community Cloud](https://share.streamlit.io/).
+3. Click `New app`.
+4. Select your GitHub repository.
+5. Set branch to `main`.
+6. Set the main file path to `streamlit_app.py`.
+7. Deploy the app.
+
+If you update the repository later, Streamlit can redeploy directly from GitHub.
+
+## Local Windows Launchers
+
+For convenience, the repository also includes:
+
+- `run_web_app.bat` for local host-only access
+- `run_web_app_lan.bat` for LAN access
+
+Both launchers install dependencies into a local virtual environment and start:
+
+```powershell
+streamlit run streamlit_app.py
+```
+
+## Notes
+
+- No additional `packages.txt` is required for the current dependency set.
+- The application uses only repository-relative paths for assets and configuration files.
+- Generated artifacts such as virtual environments, caches, builds, exports, and temporary files should stay out of Git.

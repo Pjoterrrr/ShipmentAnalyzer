@@ -30,6 +30,8 @@ def load_export_functions() -> dict[str, object]:
         "format_date",
         "format_signed_int",
         "format_percent_display",
+        "format_release_label",
+        "format_release_summary",
         "get_reference_week_rows",
         "logo_available",
         "insert_logo",

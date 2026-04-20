@@ -19,6 +19,8 @@ from analytics_calendar import (
 from openpyxl.drawing.image import Image as OpenpyxlImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from release_loader import compare_releases as compare_release_frames
+from release_loader import load_release as load_release_file
 
 
 THRESHOLD = 15
@@ -39,18 +41,6 @@ def resolve_runtime_path(relative_path):
 
 LOGO_PATH = resolve_runtime_path(Path("assets") / "logo.png")
 AUTH_USERS_PATH = resolve_runtime_path(Path("config") / "users.json")
-REQUIRED_RAW_COLUMNS = [
-    "PO Number",
-    "PO Line #",
-    "Release Version",
-    "Release Date",
-    "Part Number",
-    "Part Description",
-    "Ship Date",
-    "Receipt Date",
-    "Open Quantity",
-    "Unit of Measure",
-]
 DATE_OPTIONS = ["Receipt Date", "Ship Date"]
 DATE_LABELS = {
     "Receipt Date": "Data odbioru",
@@ -658,6 +648,52 @@ def get_metric_label(value):
     return MATRIX_METRIC_LABELS.get(value, value)
 
 
+def format_release_label(meta):
+    release_version = str(meta.get("release_version", "")).strip()
+    release_date = meta.get("release_date")
+    if release_version and release_version.lower() != "n/a":
+        return f"v{release_version}"
+    if not pd.isna(release_date):
+        return f"Snapshot {format_date(release_date)}"
+    return "n/a"
+
+
+def format_release_summary(meta):
+    release_label = format_release_label(meta)
+    release_date = meta.get("release_date")
+    if release_label == "n/a":
+        return "n/a"
+    if pd.isna(release_date):
+        return release_label
+    return f"{release_label} / {format_date(release_date)}"
+
+
+def available_detail_columns(dataframe):
+    preferred_columns = [
+        "PO Number",
+        "Origin Doc",
+        "Item",
+        "Ship To",
+        "Part Number",
+        "Part Description",
+        "Customer Material",
+        "Unrestricted Qty",
+        "Unloading Point",
+        "Ship Date",
+        "Receipt Date",
+        "Unit of Measure",
+        "CumQty",
+        "Quantity_Prev",
+        "Quantity_Curr",
+        "Delta",
+        "Percent Change",
+        "Demand Status",
+        "Change Direction",
+        "Alert",
+    ]
+    return [column for column in preferred_columns if column in dataframe.columns]
+
+
 def render_meta_card(title, body_lines):
     body_html = "<br>".join(body_lines)
     st.markdown(
@@ -965,92 +1001,11 @@ def normalize_date_selection(selection, default_start, default_end):
 
 @st.cache_data(show_spinner=False)
 def load_release(file_bytes, file_name):
-    raw_df = pd.read_excel(io.BytesIO(file_bytes), sheet_name="Raw")
-    raw_df.columns = [str(column).replace("? ", "").strip() for column in raw_df.columns]
-
-    missing_columns = [column for column in REQUIRED_RAW_COLUMNS if column not in raw_df.columns]
-    if missing_columns:
-        raise ValueError(
-            "Raw sheet is missing required columns: " + ", ".join(missing_columns)
-        )
-
-    overview_df = pd.read_excel(io.BytesIO(file_bytes), sheet_name=0, header=4)
-
-    raw_df["PO Number"] = raw_df["PO Number"].astype(str).str.strip()
-    raw_df["Part Number"] = raw_df["Part Number"].astype(str).str.strip()
-    raw_df["Part Description"] = raw_df["Part Description"].astype(str).str.strip()
-    raw_df["Unit of Measure"] = raw_df["Unit of Measure"].astype(str).str.strip()
-    raw_df["Release Date"] = pd.to_datetime(raw_df["Release Date"], errors="coerce")
-    raw_df["Ship Date"] = pd.to_datetime(raw_df["Ship Date"], errors="coerce")
-    raw_df["Receipt Date"] = pd.to_datetime(raw_df["Receipt Date"], errors="coerce")
-    raw_df["Open Quantity"] = pd.to_numeric(raw_df["Open Quantity"], errors="coerce").fillna(0)
-    raw_df = raw_df.dropna(
-        subset=["Part Number", "Part Description", "Ship Date", "Receipt Date"]
-    ).copy()
-
-    metadata = {
-        "file_name": file_name,
-        "po_number": first_non_empty(raw_df["PO Number"]),
-        "release_version": first_non_empty(raw_df["Release Version"]),
-        "release_date": raw_df["Release Date"].dropna().min(),
-        "planner_name": (
-            first_non_empty(overview_df["Planner Name"])
-            if "Planner Name" in overview_df.columns
-            else "n/a"
-        ),
-        "planner_email": (
-            first_non_empty(overview_df["Planner Email"])
-            if "Planner Email" in overview_df.columns
-            else "n/a"
-        ),
-        "products": raw_df["Part Number"].nunique(),
-        "rows": len(raw_df),
-    }
-    return raw_df, metadata
+    return load_release_file(file_bytes, file_name)
 
 
 def compare_releases(prev_df, curr_df):
-    keys = ["Part Number", "Part Description", "Ship Date", "Receipt Date"]
-
-    prev_summary = prev_df.groupby(keys, as_index=False).agg(
-        Quantity_Prev=("Open Quantity", "sum"),
-        UoM_Prev=("Unit of Measure", "first"),
-        PO_Prev=("PO Number", "first"),
-    )
-    curr_summary = curr_df.groupby(keys, as_index=False).agg(
-        Quantity_Curr=("Open Quantity", "sum"),
-        UoM_Curr=("Unit of Measure", "first"),
-        PO_Curr=("PO Number", "first"),
-    )
-
-    merged = prev_summary.merge(curr_summary, on=keys, how="outer")
-    merged["Quantity_Prev"] = merged["Quantity_Prev"].fillna(0)
-    merged["Quantity_Curr"] = merged["Quantity_Curr"].fillna(0)
-    merged["Unit of Measure"] = merged["UoM_Prev"].combine_first(merged["UoM_Curr"])
-    merged["PO Number"] = merged["PO_Prev"].combine_first(merged["PO_Curr"])
-    merged["Delta"] = merged["Quantity_Curr"] - merged["Quantity_Prev"]
-    merged["Abs Delta"] = merged["Delta"].abs()
-    merged["Percent Change"] = merged.apply(
-        lambda row: 100
-        if row["Quantity_Prev"] == 0 and row["Quantity_Curr"] > 0
-        else (
-            0
-            if row["Quantity_Prev"] == 0
-            else round((row["Delta"] / row["Quantity_Prev"]) * 100, 2)
-        ),
-        axis=1,
-    )
-    merged["Alert"] = merged["Percent Change"].abs() >= THRESHOLD
-    merged["Change Direction"] = merged["Delta"].apply(
-        lambda value: "Increase" if value > 0 else ("Decrease" if value < 0 else "No Change")
-    )
-    merged["Product Label"] = (
-        merged["Part Number"].astype(str) + " | " + merged["Part Description"].astype(str)
-    )
-    merged = merged.drop(columns=["UoM_Prev", "UoM_Curr", "PO_Prev", "PO_Curr"])
-    return merged.sort_values(["Receipt Date", "Ship Date", "Part Description"]).reset_index(
-        drop=True
-    )
+    return compare_release_frames(prev_df, curr_df, threshold=THRESHOLD)
 
 
 def summarize_products(dataframe):
@@ -1944,9 +1899,9 @@ def write_summary_sheet(
     worksheet["A4"] = "PO Number"
     worksheet["B4"] = curr_meta["po_number"]
     worksheet["A5"] = "Previous Release"
-    worksheet["B5"] = f"v{prev_meta['release_version']} / {format_date(prev_meta['release_date'])}"
+    worksheet["B5"] = format_release_summary(prev_meta)
     worksheet["A6"] = "Current Release"
-    worksheet["B6"] = f"v{curr_meta['release_version']} / {format_date(curr_meta['release_date'])}"
+    worksheet["B6"] = format_release_summary(curr_meta)
     worksheet["A7"] = "Date Basis"
     worksheet["B7"] = date_basis
     worksheet["A8"] = "Selected Period"
@@ -2365,11 +2320,11 @@ else:
                     <div class="hero-stat-grid">
                         <div class="hero-stat">
                             <div class="hero-stat-label">Poprzedni release</div>
-                            <div class="hero-stat-value">v{prev_meta['release_version']}</div>
+                            <div class="hero-stat-value">{format_release_label(prev_meta)}</div>
                         </div>
                         <div class="hero-stat">
                             <div class="hero-stat-label">Aktualny release</div>
-                            <div class="hero-stat-value">v{curr_meta['release_version']}</div>
+                            <div class="hero-stat-value">{format_release_label(curr_meta)}</div>
                         </div>
                         <div class="hero-stat">
                             <div class="hero-stat-label">Poprzedni plik</div>
@@ -2392,12 +2347,10 @@ else:
                 [
                     f"<strong>Numer PO:</strong> {curr_meta['po_number']}",
                     (
-                        f"<strong>Poprzedni release:</strong> v{prev_meta['release_version']} "
-                        f"({format_date(prev_meta['release_date'])})"
+                        f"<strong>Poprzedni release:</strong> {format_release_summary(prev_meta)}"
                     ),
                     (
-                        f"<strong>Aktualny release:</strong> v{curr_meta['release_version']} "
-                        f"({format_date(curr_meta['release_date'])})"
+                        f"<strong>Aktualny release:</strong> {format_release_summary(curr_meta)}"
                     ),
                 ],
             )
@@ -2751,20 +2704,7 @@ else:
                     height=280,
                 )
 
-                product_table = product_detail[
-                    [
-                        "Part Number",
-                        "Part Description",
-                        "Ship Date",
-                        "Receipt Date",
-                        "Quantity_Prev",
-                        "Quantity_Curr",
-                        "Delta",
-                        "Percent Change",
-                        "Change Direction",
-                        "Alert",
-                    ]
-                ].copy()
+                product_table = product_detail[available_detail_columns(product_detail)].copy()
                 product_table["Ship Date"] = product_table["Ship Date"].dt.strftime("%Y-%m-%d")
                 product_table["Receipt Date"] = product_table["Receipt Date"].dt.strftime(
                     "%Y-%m-%d"
@@ -2779,12 +2719,21 @@ else:
                     columns={
                         "Part Number": "Numer części",
                         "Part Description": "Opis produktu",
+                        "Origin Doc": "Origin Doc",
+                        "Item": "Pozycja",
+                        "Ship To": "Ship-to",
+                        "Customer Material": "Materiał klienta",
+                        "Unrestricted Qty": "Ilość unrestr.",
+                        "Unloading Point": "Punkt rozładunku",
                         "Ship Date": "Data wysyłki",
                         "Receipt Date": "Data odbioru",
+                        "Unit of Measure": "JM",
+                        "CumQty": "CumQty",
                         "Quantity_Prev": "Poprzednia ilość",
                         "Quantity_Curr": "Aktualna ilość",
                         "Delta": "Zmiana ilości",
                         "Percent Change": "Zmiana %",
+                        "Demand Status": "Status popytu",
                         "Change Direction": "Kierunek zmiany",
                         "Alert": "Alert",
                     }
@@ -2824,22 +2773,7 @@ else:
                     options=[100, 250, 500, 1000],
                     index=2,
                 )
-                detail_table = filtered_df[
-                    [
-                        "PO Number",
-                        "Part Number",
-                        "Part Description",
-                        "Ship Date",
-                        "Receipt Date",
-                        "Unit of Measure",
-                        "Quantity_Prev",
-                        "Quantity_Curr",
-                        "Delta",
-                        "Percent Change",
-                        "Change Direction",
-                        "Alert",
-                    ]
-                ].copy()
+                detail_table = filtered_df[available_detail_columns(filtered_df)].copy()
                 detail_table["Ship Date"] = detail_table["Ship Date"].dt.strftime("%Y-%m-%d")
                 detail_table["Receipt Date"] = detail_table["Receipt Date"].dt.strftime(
                     "%Y-%m-%d"
@@ -2853,15 +2787,23 @@ else:
                 detail_table = detail_table.rename(
                     columns={
                         "PO Number": "Numer PO",
+                        "Origin Doc": "Origin Doc",
+                        "Item": "Pozycja",
+                        "Ship To": "Ship-to",
                         "Part Number": "Numer części",
                         "Part Description": "Opis produktu",
+                        "Customer Material": "Materiał klienta",
+                        "Unrestricted Qty": "Ilość unrestr.",
+                        "Unloading Point": "Punkt rozładunku",
                         "Ship Date": "Data wysyłki",
                         "Receipt Date": "Data odbioru",
                         "Unit of Measure": "JM",
+                        "CumQty": "CumQty",
                         "Quantity_Prev": "Poprzednia ilość",
                         "Quantity_Curr": "Aktualna ilość",
                         "Delta": "Zmiana ilości",
                         "Percent Change": "Zmiana %",
+                        "Demand Status": "Status popytu",
                         "Change Direction": "Kierunek zmiany",
                         "Alert": "Alert",
                     }
