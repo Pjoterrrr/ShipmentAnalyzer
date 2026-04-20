@@ -115,6 +115,26 @@ st.markdown(
             linear-gradient(180deg, rgba(6,10,16,0.98), rgba(10,15,24,0.96)),
             radial-gradient(circle at top, rgba(76, 201, 240, 0.08), transparent 26%);
         backdrop-filter: blur(18px);
+        min-width: 21rem !important;
+        max-width: 21rem !important;
+    }
+    /* Keep the filter panel visible and remove the built-in collapse affordances. */
+    section[data-testid="stSidebar"][aria-expanded="false"] {
+        min-width: 21rem !important;
+        max-width: 21rem !important;
+        transform: translateX(0) !important;
+        margin-left: 0 !important;
+    }
+    section[data-testid="stSidebar"][aria-expanded="false"] > div {
+        width: 21rem !important;
+        min-width: 21rem !important;
+        max-width: 21rem !important;
+    }
+    [data-testid="collapsedControl"],
+    [data-testid="stSidebarCollapseButton"],
+    button[aria-label="Close sidebar"],
+    button[aria-label="Open sidebar"] {
+        display: none !important;
     }
     section[data-testid="stSidebar"] .stRadio > label,
     section[data-testid="stSidebar"] .stMultiSelect label,
@@ -590,6 +610,13 @@ st.markdown(
     }
     [data-testid="stToolbar"] {
         display: none;
+    }
+    /* We provide our own Wykres / Dane switch, so hide Vega/Altair action menus. */
+    .vega-embed details,
+    .vega-embed .vega-actions,
+    .stVegaLiteChart details,
+    .stVegaLiteChart summary {
+        display: none !important;
     }
     @media (max-width: 920px) {
         .hero-title {
