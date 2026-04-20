@@ -57,6 +57,10 @@ MATRIX_METRIC_LABELS = {
     "Delta": "Zmiana ilości",
     "Percent Change": "Zmiana procentowa",
 }
+VIEW_MODE_LABELS = {
+    "chart": "Wykres",
+    "table": "Dane",
+}
 
 
 st.set_page_config(
@@ -648,6 +652,10 @@ def get_metric_label(value):
     return MATRIX_METRIC_LABELS.get(value, value)
 
 
+def get_view_mode_label(value):
+    return VIEW_MODE_LABELS.get(value, value)
+
+
 def format_release_label(meta):
     release_version = str(meta.get("release_version", "")).strip()
     release_date = meta.get("release_date")
@@ -692,6 +700,52 @@ def available_detail_columns(dataframe):
         "Alert",
     ]
     return [column for column in preferred_columns if column in dataframe.columns]
+
+
+def format_chart_source_table(dataframe):
+    source_table = dataframe.copy()
+    for column in source_table.columns:
+        if pd.api.types.is_datetime64_any_dtype(source_table[column]):
+            source_table[column] = source_table[column].dt.strftime("%Y-%m-%d")
+        elif pd.api.types.is_bool_dtype(source_table[column]):
+            source_table[column] = source_table[column].map(
+                lambda value: "Tak" if value else "Nie"
+            )
+    return source_table
+
+
+def render_chart_table_switch(
+    key,
+    chart,
+    source_df,
+    *,
+    chart_empty_message="Brak danych do wykresu.",
+    table_empty_message="Brak danych źródłowych.",
+    table_height=320,
+):
+    state_key = f"{key}_view_mode"
+    st.session_state.setdefault(state_key, "chart")
+    selected_view = st.radio(
+        "Widok",
+        options=["chart", "table"],
+        key=state_key,
+        horizontal=True,
+        label_visibility="collapsed",
+        format_func=get_view_mode_label,
+    )
+
+    if selected_view == "chart":
+        if chart is None:
+            st.info(chart_empty_message)
+        else:
+            st.altair_chart(chart, use_container_width=True)
+        return
+
+    source_table = format_chart_source_table(source_df)
+    if source_table.empty:
+        st.info(table_empty_message)
+    else:
+        st.dataframe(source_table, use_container_width=True, height=table_height)
 
 
 def render_meta_card(title, body_lines):
@@ -1380,19 +1434,27 @@ def build_delta_chart(date_summary, x_title):
     return apply_chart_theme(chart)
 
 
-def build_product_bar_chart(product_summary, chart_type):
+def build_product_bar_source(product_summary, chart_type):
     if chart_type == "increase":
-        source = (
+        return (
             product_summary[product_summary["Delta"] > 0]
-            .nlargest(10, "Delta")[["Part Description", "Delta"]]
+            .nlargest(10, "Delta")[["Part Number", "Part Description", "Delta"]]
+            .reset_index(drop=True)
         )
+
+    return (
+        product_summary[product_summary["Delta"] < 0]
+        .nsmallest(10, "Delta")[["Part Number", "Part Description", "Delta"]]
+        .reset_index(drop=True)
+    )
+
+
+def build_product_bar_chart(product_summary, chart_type):
+    source = build_product_bar_source(product_summary, chart_type)
+    if chart_type == "increase":
         color = "#5f8b75"
         title = "Największe wzrosty"
     else:
-        source = (
-            product_summary[product_summary["Delta"] < 0]
-            .nsmallest(10, "Delta")[["Part Description", "Delta"]]
-        )
         color = "#c56b61"
         title = "Największe spadki"
 
@@ -1443,13 +1505,18 @@ def build_product_bar_chart(product_summary, chart_type):
         return apply_chart_theme(chart), title
 
 
-def build_change_mix_chart(dataframe):
+def build_change_mix_source(dataframe):
     mix = (
         dataframe.groupby("Change Direction", as_index=False)
         .agg(Rows=("Change Direction", "size"), Total_Delta=("Delta", "sum"))
     )
     mix["Direction Label"] = mix["Change Direction"].map(get_change_label)
     mix["Share"] = mix["Rows"] / max(int(mix["Rows"].sum()), 1)
+    return mix
+
+
+def build_change_mix_chart(dataframe):
+    mix = build_change_mix_source(dataframe)
     order = ["Wzrost", "Spadek", "Bez zmian"]
     colors = ["#5f8b75", "#c56b61", "#6f87ab"]
     bars = (
@@ -2497,21 +2564,28 @@ else:
 
             with dashboard_tab:
                 st.subheader(f"Trend zmian według osi: {get_date_label(date_basis)}")
-                st.altair_chart(
+                render_chart_table_switch(
+                    "dashboard_trend",
                     build_quantity_chart(date_summary, get_date_label(date_basis)),
-                    use_container_width=True,
+                    date_summary,
+                    table_height=360,
                 )
 
                 trend_left, trend_right = st.columns([1.45, 1], gap="large")
                 with trend_left:
-                    st.altair_chart(
+                    render_chart_table_switch(
+                        "dashboard_delta",
                         build_delta_chart(date_summary, get_date_label(date_basis)),
-                        use_container_width=True,
+                        date_summary,
+                        table_height=320,
                     )
                 with trend_right:
                     st.subheader("Struktura zmian")
-                    st.altair_chart(
-                        build_change_mix_chart(filtered_df), use_container_width=True
+                    render_chart_table_switch(
+                        "dashboard_mix",
+                        build_change_mix_chart(filtered_df),
+                        build_change_mix_source(filtered_df),
+                        table_height=240,
                     )
 
                 increase_chart, increase_title = build_product_bar_chart(
@@ -2527,14 +2601,24 @@ else:
                     if increase_chart is None:
                         st.info("Brak produktów ze wzrostem w aktualnym filtrowaniu.")
                     else:
-                        st.altair_chart(increase_chart, use_container_width=True)
+                        render_chart_table_switch(
+                            "dashboard_increase",
+                            increase_chart,
+                            build_product_bar_source(product_summary, "increase"),
+                            table_height=340,
+                        )
 
                 with dashboard_right:
                     st.subheader(decrease_title)
                     if decrease_chart is None:
                         st.info("Brak produktów ze spadkiem w aktualnym filtrowaniu.")
                     else:
-                        st.altair_chart(decrease_chart, use_container_width=True)
+                        render_chart_table_switch(
+                            "dashboard_decrease",
+                            decrease_chart,
+                            build_product_bar_source(product_summary, "decrease"),
+                            table_height=340,
+                        )
 
                 st.subheader("Najważniejsze zmiany")
                 highlight_table = (
@@ -2565,10 +2649,14 @@ else:
 
                 st.subheader("Tygodnie ISO")
                 weekly_chart = build_weekly_quantity_chart(weekly_summary)
-                if weekly_chart is not None:
-                    st.altair_chart(weekly_chart, use_container_width=True)
                 weekly_preview = prepare_weekly_display_table(weekly_summary).tail(8)
-                st.dataframe(weekly_preview, use_container_width=True, height=320)
+                render_chart_table_switch(
+                    "dashboard_weekly",
+                    weekly_chart,
+                    weekly_preview,
+                    chart_empty_message="Brak danych tygodniowych do wykresu.",
+                    table_height=320,
+                )
 
             with weekly_tab:
                 st.subheader("Analiza tygodniowa oparta na datach")
@@ -2582,14 +2670,24 @@ else:
                     )
 
                 weekly_qty_chart = build_weekly_quantity_chart(weekly_summary)
-                if weekly_qty_chart is not None:
-                    st.altair_chart(weekly_qty_chart, use_container_width=True)
+                render_chart_table_switch(
+                    "weekly_quantity",
+                    weekly_qty_chart,
+                    prepare_weekly_display_table(weekly_summary),
+                    chart_empty_message="Brak danych tygodniowych do wykresu.",
+                    table_height=360,
+                )
 
                 weekly_left, weekly_right = st.columns([1.3, 1], gap="large")
                 with weekly_left:
                     weekly_delta_chart = build_weekly_delta_chart(weekly_summary)
-                    if weekly_delta_chart is not None:
-                        st.altair_chart(weekly_delta_chart, use_container_width=True)
+                    render_chart_table_switch(
+                        "weekly_delta",
+                        weekly_delta_chart,
+                        prepare_weekly_display_table(weekly_summary),
+                        chart_empty_message="Brak danych tygodniowych do wykresu delta.",
+                        table_height=320,
+                    )
                 with weekly_right:
                     weekly_focus = pd.DataFrame(
                         [
@@ -2679,11 +2777,17 @@ else:
                     "Liczba alertów", int(product_detail["Alert"].sum())
                 )
 
-                st.altair_chart(
-                    build_quantity_chart(product_date_summary, get_date_label(date_basis)), use_container_width=True
+                render_chart_table_switch(
+                    "product_quantity",
+                    build_quantity_chart(product_date_summary, get_date_label(date_basis)),
+                    product_date_summary,
+                    table_height=320,
                 )
-                st.altair_chart(
-                    build_delta_chart(product_date_summary, get_date_label(date_basis)), use_container_width=True
+                render_chart_table_switch(
+                    "product_delta",
+                    build_delta_chart(product_date_summary, get_date_label(date_basis)),
+                    product_date_summary,
+                    table_height=320,
                 )
 
                 product_weekly_summary = build_weekly_summary(
@@ -2696,12 +2800,12 @@ else:
                 )
                 st.subheader("Tygodnie ISO dla produktu")
                 product_weekly_chart = build_weekly_quantity_chart(product_weekly_summary)
-                if product_weekly_chart is not None:
-                    st.altair_chart(product_weekly_chart, use_container_width=True)
-                st.dataframe(
+                render_chart_table_switch(
+                    "product_weekly",
+                    product_weekly_chart,
                     prepare_weekly_display_table(product_weekly_summary),
-                    use_container_width=True,
-                    height=280,
+                    chart_empty_message="Brak danych tygodniowych dla wybranego produktu.",
+                    table_height=280,
                 )
 
                 product_table = product_detail[available_detail_columns(product_detail)].copy()

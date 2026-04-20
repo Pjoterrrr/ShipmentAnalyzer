@@ -40,6 +40,8 @@ desktop.ini
 *.log
 streamlit_start.out
 streamlit_start.err
+streamlit_ui_check.out
+streamlit_ui_check.err
 
 # Build and packaging artifacts
 build/
