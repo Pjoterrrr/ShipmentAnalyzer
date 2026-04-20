@@ -1,12 +1,34 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120" role="img" aria-label="Tesla">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 160" role="img" aria-label="Tesla">
   <defs>
-    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0%" stop-color="#171013"/>
-      <stop offset="100%" stop-color="#24161a"/>
+    <linearGradient id="ts-bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#2d0d14"/>
+      <stop offset="45%" stop-color="#52131e"/>
+      <stop offset="100%" stop-color="#19111a"/>
     </linearGradient>
+    <radialGradient id="ts-glow" cx="18%" cy="18%" r="82%">
+      <stop offset="0%" stop-color="#ff6f88" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#ff6f88" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="ts-shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="9" stdDeviation="8" flood-color="#000000" flood-opacity="0.34"/>
+    </filter>
   </defs>
-  <rect width="320" height="120" rx="24" fill="url(#bg)"/>
-  <path d="M54 30 C63 24, 76 24, 86 30 C78 31, 72 34, 69 40 L69 92 L61 92 L61 40 C58 34, 52 31, 44 30 C47 30, 50 30, 54 30 Z" fill="#ff6f6f"/>
-  <text x="118" y="54" fill="#f5f7fb" font-family="Segoe UI, Arial, sans-serif" font-size="22" font-weight="800" letter-spacing="2">TESLA</text>
-  <text x="118" y="79" fill="#d3a8a8" font-family="Segoe UI, Arial, sans-serif" font-size="13">ReleaseData / legacy format</text>
+
+  <rect width="420" height="160" rx="28" fill="url(#ts-bg)"/>
+  <rect width="420" height="160" rx="28" fill="url(#ts-glow)"/>
+
+  <g transform="translate(72 22)" fill="#fff9fb" filter="url(#ts-shadow)">
+    <path d="M20 23 C58 8, 119 8, 157 23 L149 36 C120 25, 58 25, 29 36 Z"/>
+    <path d="M84 30 L98 30 L90 56 L90 115 L84 115 L84 56 Z"/>
+    <path d="M74 34 C73 26, 61 22, 35 22 L32 33 C50 33, 62 37, 67 45 Z"/>
+    <path d="M108 34 C109 26, 121 22, 147 22 L150 33 C132 33, 120 37, 115 45 Z"/>
+    <path d="M82 115 L90 115 L86 138 Z"/>
+  </g>
+
+  <g fill="#fff7fa" font-family="'Segoe UI', Arial, sans-serif" font-weight="800">
+    <text x="34" y="132" font-size="32" letter-spacing="10">TESLA</text>
+  </g>
+
+  <text x="236" y="84" fill="#ffe8ee" font-family="'Segoe UI', Arial, sans-serif" font-size="20" font-weight="700">Tesla</text>
+  <text x="236" y="110" fill="#e5a9b8" font-family="'Segoe UI', Arial, sans-serif" font-size="14" letter-spacing="0.8">ReleaseData / legacy format</text>
 </svg>
