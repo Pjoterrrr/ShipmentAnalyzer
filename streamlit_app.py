@@ -40,6 +40,8 @@ def resolve_runtime_path(relative_path):
 
 
 LOGO_PATH = resolve_runtime_path(Path("assets") / "logo.png")
+MERCEDES_LOGO_PATH = resolve_runtime_path(Path("assets") / "brand_mercedes.svg")
+TESLA_LOGO_PATH = resolve_runtime_path(Path("assets") / "brand_tesla.svg")
 AUTH_USERS_PATH = resolve_runtime_path(Path("config") / "users.json")
 DATE_OPTIONS = ["Receipt Date", "Ship Date"]
 DATE_LABELS = {
@@ -129,6 +131,19 @@ st.markdown(
         box-shadow: var(--shadow-lg);
         position: sticky;
         top: 1rem;
+    }
+    .side-panel-brand {
+        width: 156px;
+        max-width: 100%;
+        height: auto;
+        display: block;
+        margin: 0 0 0.9rem 0;
+        filter: drop-shadow(0 14px 26px rgba(0, 0, 0, 0.28));
+    }
+    .side-panel-divider {
+        border: 0;
+        border-top: 1px solid var(--line);
+        margin: 0.9rem 0;
     }
     .filter-panel-kicker {
         font-size: 0.74rem;
@@ -248,6 +263,84 @@ st.markdown(
         font-size: 1.25rem;
         font-weight: 800;
         line-height: 1.1;
+    }
+    .compact-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1.45fr) auto;
+        gap: 1rem;
+        align-items: center;
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        padding: 1.15rem 1.25rem;
+        background:
+            radial-gradient(circle at top right, rgba(76, 201, 240, 0.10), transparent 32%),
+            linear-gradient(180deg, rgba(14, 20, 31, 0.99), rgba(10, 15, 24, 0.96));
+        box-shadow: var(--shadow-lg);
+        margin-bottom: 1rem;
+    }
+    .compact-header-kicker {
+        font-size: 0.73rem;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: var(--steel);
+        font-weight: 800;
+        margin-bottom: 0.35rem;
+    }
+    .compact-header-title {
+        color: var(--ink);
+        font-size: 1.75rem;
+        line-height: 1.02;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        margin-bottom: 0.45rem;
+    }
+    .compact-header-copy {
+        color: var(--slate);
+        font-size: 0.94rem;
+        line-height: 1.65;
+        margin-bottom: 0.8rem;
+    }
+    .compact-pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.55rem;
+    }
+    .compact-pill {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 0.4rem 0.78rem;
+        background: rgba(17, 24, 39, 0.82);
+        color: var(--navy);
+        font-size: 0.79rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+    .compact-brand-box {
+        min-width: 176px;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        padding: 0.9rem 1rem;
+        background: rgba(17, 24, 39, 0.72);
+        display: grid;
+        gap: 0.55rem;
+        justify-items: center;
+        text-align: center;
+    }
+    .compact-brand-logo {
+        width: 112px;
+        max-width: 100%;
+        height: auto;
+        display: block;
+    }
+    .compact-brand-label {
+        color: var(--ink);
+        font-size: 0.92rem;
+        font-weight: 800;
+    }
+    .compact-brand-copy {
+        color: var(--muted);
+        font-size: 0.78rem;
+        line-height: 1.45;
     }
     .brand-badge {
         display: inline-flex;
@@ -642,6 +735,13 @@ st.markdown(
         .login-grid {
             grid-template-columns: 1fr;
         }
+        .compact-header {
+            grid-template-columns: 1fr;
+        }
+        .compact-brand-box {
+            justify-items: start;
+            text-align: left;
+        }
     }
     </style>
     """,
@@ -1028,11 +1128,27 @@ def logo_available():
     return LOGO_PATH.exists()
 
 
-def logo_data_uri():
-    if not logo_available():
+def asset_data_uri(path):
+    try:
+        if not path.exists():
+            return ""
+        extension = path.suffix.lower()
+        if extension == ".svg":
+            mime_type = "image/svg+xml"
+        elif extension in {".jpg", ".jpeg"}:
+            mime_type = "image/jpeg"
+        elif extension == ".webp":
+            mime_type = "image/webp"
+        else:
+            mime_type = "image/png"
+        encoded = base64.b64encode(path.read_bytes()).decode("utf-8")
+        return f"data:{mime_type};base64,{encoded}"
+    except Exception:
         return ""
-    encoded = base64.b64encode(LOGO_PATH.read_bytes()).decode("utf-8")
-    return f"data:image/png;base64,{encoded}"
+
+
+def logo_data_uri():
+    return asset_data_uri(LOGO_PATH)
 
 
 def render_sidebar_user(target=st.sidebar):
@@ -1050,6 +1166,109 @@ def render_sidebar_user(target=st.sidebar):
     if target.button("Wyloguj", use_container_width=True):
         logout_user()
         st.rerun()
+
+
+def detect_brand_context(*metas):
+    file_names = [
+        str(meta.get("file_name", "")).lower()
+        for meta in metas
+        if isinstance(meta, dict)
+    ]
+    file_types = {
+        str(meta.get("file_type", "")).strip().lower()
+        for meta in metas
+        if isinstance(meta, dict)
+    }
+    joined_names = " ".join(file_names)
+
+    if any(keyword in joined_names for keyword in ["mercedes", "merc", "vl10e"]) or "vl10e_block" in file_types:
+        return {
+            "brand_key": "mercedes",
+            "label": "Mercedes",
+            "status": "Klient: Mercedes",
+            "format_copy": "Rozpoznano plik VL10E / Mercedes.",
+            "logo_uri": asset_data_uri(MERCEDES_LOGO_PATH),
+        }
+
+    if any(keyword in joined_names for keyword in ["releasedata", "tesla"]) or (
+        "legacy_wide" in file_types and "releasedata" in joined_names
+    ):
+        return {
+            "brand_key": "tesla",
+            "label": "Tesla",
+            "status": "Klient: Tesla / ReleaseData",
+            "format_copy": "Rozpoznano plik ReleaseData / legacy wide.",
+            "logo_uri": asset_data_uri(TESLA_LOGO_PATH),
+        }
+
+    return {
+        "brand_key": "default",
+        "label": "Analyzer",
+        "status": "Klient: neutralny",
+        "format_copy": "Brak dedykowanej marki dla załadowanego pliku.",
+        "logo_uri": logo_data_uri(),
+    }
+
+
+def describe_format_context(*metas):
+    file_types = [
+        str(meta.get("file_type", "")).strip().lower()
+        for meta in metas
+        if isinstance(meta, dict) and meta.get("file_type")
+    ]
+    if not file_types:
+        return "Oczekiwanie na dwa pliki wejściowe."
+    unique_types = sorted(set(file_types))
+    if unique_types == ["vl10e_block"]:
+        return "Format: VL10E block"
+    if unique_types == ["legacy_wide"]:
+        return "Format: Legacy wide"
+    return "Format: mixed / mixed release sources"
+
+
+def render_side_panel_brand(brand_context):
+    logo_uri = brand_context.get("logo_uri", "")
+    if logo_uri:
+        st.markdown(
+            f'<img class="side-panel-brand" src="{logo_uri}" alt="{html.escape(brand_context.get("label", BRAND_NAME))} logo" />',
+            unsafe_allow_html=True,
+        )
+
+
+def render_compact_header(brand_context, prev_meta, curr_meta, date_basis, selected_start_date, selected_end_date):
+    format_context = describe_format_context(prev_meta, curr_meta)
+    logo_uri = brand_context.get("logo_uri", "")
+    brand_logo_html = (
+        f'<img class="compact-brand-logo" src="{logo_uri}" alt="{html.escape(brand_context.get("label", BRAND_NAME))} logo" />'
+        if logo_uri
+        else f'<div class="brand-badge">{html.escape(brand_context.get("label", BRAND_NAME))}</div>'
+    )
+    st.markdown(
+        f"""
+        <div class="compact-header">
+            <div>
+                <div class="compact-header-kicker">Release Intelligence</div>
+                <div class="compact-header-title">Raport zmian dla PO {html.escape(str(curr_meta.get('po_number', 'n/a')))}</div>
+                <div class="compact-header-copy">
+                    {html.escape(brand_context.get('status', 'Klient: neutralny'))}. {html.escape(brand_context.get('format_copy', ''))}
+                    Okno analizy obejmuje zakres {selected_start_date.strftime('%Y-%m-%d')} do {selected_end_date.strftime('%Y-%m-%d')}
+                    na osi {html.escape(get_date_label(date_basis))}.
+                </div>
+                <div class="compact-pill-row">
+                    <div class="compact-pill">{html.escape(format_context)}</div>
+                    <div class="compact-pill">Poprzedni: {html.escape(format_release_label(prev_meta))}</div>
+                    <div class="compact-pill">Aktualny: {html.escape(format_release_label(curr_meta))}</div>
+                </div>
+            </div>
+            <div class="compact-brand-box">
+                {brand_logo_html}
+                <div class="compact-brand-label">{html.escape(brand_context.get('label', BRAND_NAME))}</div>
+                <div class="compact-brand-copy">{html.escape(curr_meta.get('file_name', ''))}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def apply_chart_theme(chart):
@@ -1176,6 +1395,693 @@ def render_filter_controls(result):
         "only_alerts": only_alerts,
         "full_product_summary": full_product_summary,
     }
+
+
+def render_filter_panel_shell(
+    kicker="Panel Nawigacji",
+    title="Filtry i kontekst analizy",
+    copy=(
+        "Ten panel pozostaje stale widoczny, aby filtrowanie, kalendarz i kontrola zakresu "
+        "byly zawsze pod reka podczas pracy z dashboardem."
+    ),
+):
+    st.markdown(
+        f"""
+        <div class="filter-panel-shell">
+            <div class="filter-panel-kicker">{html.escape(str(kicker))}</div>
+            <div class="filter-panel-title">{html.escape(str(title))}</div>
+            <div class="filter-panel-copy">
+                {html.escape(str(copy))}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_filter_controls(result):
+    st.markdown("### Filtry")
+    date_basis = st.radio(
+        "Os dat",
+        DATE_OPTIONS,
+        index=0,
+        format_func=get_date_label,
+    )
+
+    available_dates = result[date_basis].dropna().sort_values()
+    min_date = available_dates.min().date()
+    max_date = available_dates.max().date()
+
+    st.markdown("---")
+    st.markdown("##### Zakres czasowy")
+    selected_date_input = st.date_input(
+        "Wybierz przedzial dat:",
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date,
+        help="Kliknij, aby wybrac pojedynczy dzien lub zakres dat do analizy.",
+        label_visibility="collapsed",
+    )
+    selected_start_date, selected_end_date = normalize_date_selection(
+        selected_date_input, min_date, max_date
+    )
+    swapped_dates = selected_start_date > selected_end_date
+    if swapped_dates:
+        selected_start_date, selected_end_date = selected_end_date, selected_start_date
+        st.warning("Zamieniono kolejnosc dat, aby zachowac poprawny zakres analizy.")
+
+    st.caption(
+        f"Zakres: {selected_start_date.strftime('%Y-%m-%d')} -> {selected_end_date.strftime('%Y-%m-%d')}"
+    )
+    st.markdown("---")
+
+    full_product_summary = summarize_products(result)
+    all_products = full_product_summary["Product Label"].tolist()
+    selected_products = st.multiselect(
+        "Produkty",
+        options=all_products,
+        default=all_products,
+    )
+    search_term = st.text_input("Szukaj po numerze lub opisie")
+    selected_change_directions = st.multiselect(
+        "Kierunek zmiany",
+        options=["Increase", "Decrease", "No Change"],
+        default=["Increase", "Decrease", "No Change"],
+        format_func=get_change_label,
+    )
+    only_alerts = st.checkbox(f"Tylko alerty >= {THRESHOLD}%")
+
+    return {
+        "date_basis": date_basis,
+        "selected_start_date": selected_start_date,
+        "selected_end_date": selected_end_date,
+        "selected_products": selected_products,
+        "search_term": search_term,
+        "selected_change_directions": selected_change_directions,
+        "only_alerts": only_alerts,
+        "full_product_summary": full_product_summary,
+    }
+
+
+def render_welcome_side_panel(prev_file, current_file):
+    pending_meta = []
+    if prev_file is not None:
+        pending_meta.append({"file_name": prev_file.name})
+    if current_file is not None:
+        pending_meta.append({"file_name": current_file.name})
+    brand_context = detect_brand_context(*pending_meta) if pending_meta else detect_brand_context()
+
+    render_filter_panel_shell(
+        kicker="Workspace",
+        title="Panel aplikacji",
+        copy=(
+            "Po dodaniu dwoch plikow w tym miejscu pojawi sie stale widoczny panel filtrow, "
+            "kalendarz i kontrolki pracy z analiza."
+        ),
+    )
+    render_sidebar_user(st)
+    render_side_panel_brand(brand_context)
+    if prev_file is not None or current_file is not None:
+        st.caption(brand_context.get("format_copy", ""))
+    st.markdown('<hr class="side-panel-divider" />', unsafe_allow_html=True)
+    st.markdown("##### Status plikow")
+    st.caption(
+        "Poprzedni plik: "
+        + (prev_file.name if prev_file is not None else "oczekiwanie na upload")
+    )
+    st.caption(
+        "Aktualny plik: "
+        + (current_file.name if current_file is not None else "oczekiwanie na upload")
+    )
+    st.info(
+        "Po zaladowaniu obu plikow panel po lewej stronie zostanie uzupelniony o filtry, "
+        "zakres dat i pozostale kontrolki analizy."
+    )
+
+
+def render_analysis_side_panel(result, brand_context):
+    render_filter_panel_shell()
+    render_sidebar_user(st)
+    render_side_panel_brand(brand_context)
+    st.caption(brand_context.get("format_copy", ""))
+    st.markdown('<hr class="side-panel-divider" />', unsafe_allow_html=True)
+    return render_filter_controls(result)
+
+
+def render_analysis_main(
+    filtered_df,
+    product_summary,
+    date_summary,
+    weekly_summary,
+    key_findings,
+    prev_meta,
+    curr_meta,
+    date_basis,
+    selected_start_date,
+    selected_end_date,
+):
+    brand_context = detect_brand_context(prev_meta, curr_meta)
+
+    st.success("Analiza porownawcza jest gotowa.")
+    render_compact_header(
+        brand_context,
+        prev_meta,
+        curr_meta,
+        date_basis,
+        selected_start_date,
+        selected_end_date,
+    )
+
+    header_left, header_right = st.columns([1.5, 1], gap="large")
+    with header_left:
+        render_meta_card(
+            "Kontekst release'u",
+            [
+                f"<strong>Numer PO:</strong> {curr_meta['po_number']}",
+                f"<strong>Poprzedni release:</strong> {format_release_summary(prev_meta)}",
+                f"<strong>Aktualny release:</strong> {format_release_summary(curr_meta)}",
+            ],
+        )
+    with header_right:
+        render_meta_card(
+            "Planista",
+            [
+                f"<strong>Planista:</strong> {curr_meta['planner_name']}",
+                f"<strong>Email:</strong> {curr_meta['planner_email']}",
+                f"<strong>Produkty w zakresie:</strong> {product_summary['Part Number'].nunique()}",
+            ],
+        )
+
+    if filtered_df.empty:
+        st.warning(
+            "Po zastosowaniu filtrow nie ma danych do pokazania. "
+            "Poszerz zakres dat albo przywroc produkty w panelu filtrow."
+        )
+        return
+
+    total_prev = filtered_df["Quantity_Prev"].sum()
+    total_curr = filtered_df["Quantity_Curr"].sum()
+    total_delta = filtered_df["Delta"].sum()
+    alert_count = int(filtered_df["Alert"].sum())
+    products_changed = int((product_summary["Delta"] != 0).sum())
+
+    render_status_pills(total_delta, alert_count, products_changed)
+    metric_cols = st.columns(5)
+    metric_cols[0].metric("Poprzednia ilosc", f"{total_prev:,.0f}")
+    metric_cols[1].metric(
+        "Aktualna ilosc",
+        f"{total_curr:,.0f}",
+        delta=f"{total_curr - total_prev:+,.0f}",
+    )
+    metric_cols[2].metric("Bilans zmian", f"{total_delta:+,.0f}")
+    metric_cols[3].metric(
+        "Liczba alertow",
+        f"{alert_count:,}",
+        delta=f"{(alert_count / len(filtered_df)):.1%}",
+        delta_color="inverse",
+    )
+    metric_cols[4].metric("Zmienne produkty", f"{products_changed:,}")
+
+    reference_week = get_last_completed_reference_week(selected_end_date)
+    reference_row, previous_week_row = get_reference_week_rows(weekly_summary)
+    reference_week_label = (
+        reference_row["Week Label"] if reference_row is not None else reference_week.week_label
+    )
+    reference_range_label = (
+        format_week_range(reference_row["Week Start"], reference_row["Week End"])
+        if reference_row is not None
+        else format_week_range(reference_week.week_start, reference_week.week_end)
+    )
+    reference_release_delta = (
+        format_signed_int(reference_row["Delta"]) if reference_row is not None else "+0"
+    )
+    reference_release_pct = (
+        format_percent_display(reference_row["Release Percent Label"])
+        if reference_row is not None
+        else "n/a"
+    )
+    reference_wow_delta = (
+        format_signed_int(reference_row["WoW Delta"]) if reference_row is not None else "+0"
+    )
+    reference_wow_pct = (
+        format_percent_display(reference_row["WoW Percent Label"])
+        if reference_row is not None
+        else "n/a"
+    )
+    reference_working_days = (
+        int(reference_row["Working_Days_PL"]) if reference_row is not None else 0
+    )
+    reference_per_day = (
+        "n/a"
+        if reference_row is None or pd.isna(reference_row["Avg Current / Working Day"])
+        else f"{float(reference_row['Avg Current / Working Day']):,.2f} / dzien"
+    )
+    previous_week_label = (
+        previous_week_row["Week Label"] if previous_week_row is not None else "brak"
+    )
+
+    st.caption(
+        f"Analiza tygodniowa odnosi sie do {reference_week_label} ({reference_range_label}). "
+        f"Data referencyjna: {selected_end_date:%Y-%m-%d}. "
+        + (
+            "Poniewaz data koncowa wypada w trakcie tygodnia, jako referencje przyjeto ostatni pelny zakonczony tydzien ISO."
+            if selected_end_date.weekday() != 6
+            else "Poniewaz data koncowa wypada w niedziele, ten tydzien zostal uznany za pelny zakonczony tydzien ISO."
+        )
+    )
+
+    weekly_metric_cols = st.columns(5)
+    weekly_metric_cols[0].metric(
+        "Referencyjny tydzien ISO",
+        reference_week_label,
+        delta=reference_range_label,
+    )
+    weekly_metric_cols[1].metric(
+        "Aktualny wolumen tygodnia",
+        f"{float(reference_row['Quantity_Curr']):,.0f}" if reference_row is not None else "0",
+        delta=reference_release_delta,
+    )
+    weekly_metric_cols[2].metric(
+        "Zmiana vs poprzedni release",
+        reference_release_pct,
+        delta=f"prev {float(reference_row['Quantity_Prev']):,.0f}" if reference_row is not None else "prev 0",
+    )
+    weekly_metric_cols[3].metric(
+        "Zmiana WoW",
+        reference_wow_delta,
+        delta=f"{reference_wow_pct} vs {previous_week_label}",
+    )
+    weekly_metric_cols[4].metric(
+        "Dni robocze PL",
+        f"{reference_working_days}",
+        delta=reference_per_day,
+    )
+
+    st.markdown(
+        """
+        <div class="section-banner">
+            <div class="section-kicker">Executive Summary</div>
+            <div class="section-copy">
+                Najwazniejsze sygnaly, ktore warto sprawdzic w pierwszej kolejnosci.
+                Duzy naglowek pokazuje nazwe produktu, a krotki opis pod spodem wyjasnia znaczenie zmiany.
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.subheader("Kluczowe wnioski")
+    finding_cols = st.columns(max(1, min(len(key_findings), 4)), gap="large")
+    for idx, finding in enumerate(key_findings):
+        with finding_cols[idx]:
+            render_finding_card(finding["label"], finding["title"], finding["copy"])
+
+    dashboard_tab, weekly_tab, product_tab, matrix_tab, detail_tab = st.tabs(
+        ["Dashboard", "Analiza tygodniowa", "Raport produktu", "Macierz release'u", "Dane szczegolowe"]
+    )
+
+    with dashboard_tab:
+        st.subheader(f"Trend zmian wedlug osi: {get_date_label(date_basis)}")
+        render_chart_table_switch(
+            "dashboard_trend",
+            build_quantity_chart(date_summary, get_date_label(date_basis)),
+            date_summary,
+            table_height=360,
+        )
+
+        trend_left, trend_right = st.columns([1.45, 1], gap="large")
+        with trend_left:
+            render_chart_table_switch(
+                "dashboard_delta",
+                build_delta_chart(date_summary, get_date_label(date_basis)),
+                date_summary,
+                table_height=320,
+            )
+        with trend_right:
+            st.subheader("Struktura zmian")
+            render_chart_table_switch(
+                "dashboard_mix",
+                build_change_mix_chart(filtered_df),
+                build_change_mix_source(filtered_df),
+                table_height=240,
+            )
+
+        increase_chart, increase_title = build_product_bar_chart(product_summary, "increase")
+        decrease_chart, decrease_title = build_product_bar_chart(product_summary, "decrease")
+        dashboard_left, dashboard_right = st.columns(2)
+
+        with dashboard_left:
+            st.subheader(increase_title)
+            if increase_chart is None:
+                st.info("Brak produktow ze wzrostem w aktualnym filtrowaniu.")
+            else:
+                render_chart_table_switch(
+                    "dashboard_increase",
+                    increase_chart,
+                    build_product_bar_source(product_summary, "increase"),
+                    table_height=340,
+                )
+
+        with dashboard_right:
+            st.subheader(decrease_title)
+            if decrease_chart is None:
+                st.info("Brak produktow ze spadkiem w aktualnym filtrowaniu.")
+            else:
+                render_chart_table_switch(
+                    "dashboard_decrease",
+                    decrease_chart,
+                    build_product_bar_source(product_summary, "decrease"),
+                    table_height=340,
+                )
+
+        st.subheader("Najwazniejsze zmiany")
+        highlight_table = (
+            product_summary.assign(Abs_Delta=product_summary["Delta"].abs())
+            .sort_values("Abs_Delta", ascending=False)
+            .drop(columns=["Abs_Delta"])
+            .head(10)
+        )
+        highlight_table["Quantity_Prev"] = highlight_table["Quantity_Prev"].map(
+            lambda value: f"{value:,.0f}"
+        )
+        highlight_table["Quantity_Curr"] = highlight_table["Quantity_Curr"].map(
+            lambda value: f"{value:,.0f}"
+        )
+        highlight_table["Delta"] = highlight_table["Delta"].map(format_signed_int)
+        highlight_table = highlight_table.rename(
+            columns={
+                "Part Number": "Numer czesci",
+                "Part Description": "Opis produktu",
+                "Quantity_Prev": "Poprzednia ilosc",
+                "Quantity_Curr": "Aktualna ilosc",
+                "Delta": "Zmiana ilosci",
+                "Alert_Count": "Liczba alertow",
+                "Change Direction": "Kierunek zmiany",
+            }
+        )
+        st.dataframe(highlight_table, use_container_width=True, height=360)
+
+        st.subheader("Tygodnie ISO")
+        weekly_chart = build_weekly_quantity_chart(weekly_summary)
+        weekly_preview = prepare_weekly_display_table(weekly_summary).tail(8)
+        render_chart_table_switch(
+            "dashboard_weekly",
+            weekly_chart,
+            weekly_preview,
+            chart_empty_message="Brak danych tygodniowych do wykresu.",
+            table_height=320,
+        )
+
+    with weekly_tab:
+        st.subheader("Analiza tygodniowa oparta na datach")
+        weekly_partial = weekly_summary[
+            weekly_summary["Is Partial Range"] | ~weekly_summary["Is Closed Week"]
+        ]
+        if not weekly_partial.empty:
+            st.info(
+                "W tabeli i wykresach tygodnie oznaczone jako 'Partial range' lub 'Open week' "
+                "obejmuja niepelny zakres albo nie byly jeszcze zakonczone wzgledem daty referencyjnej."
+            )
+
+        weekly_qty_chart = build_weekly_quantity_chart(weekly_summary)
+        render_chart_table_switch(
+            "weekly_quantity",
+            weekly_qty_chart,
+            prepare_weekly_display_table(weekly_summary),
+            chart_empty_message="Brak danych tygodniowych do wykresu.",
+            table_height=360,
+        )
+
+        weekly_left, weekly_right = st.columns([1.3, 1], gap="large")
+        with weekly_left:
+            weekly_delta_chart = build_weekly_delta_chart(weekly_summary)
+            render_chart_table_switch(
+                "weekly_delta",
+                weekly_delta_chart,
+                prepare_weekly_display_table(weekly_summary),
+                chart_empty_message="Brak danych tygodniowych do wykresu delta.",
+                table_height=320,
+            )
+        with weekly_right:
+            weekly_focus = pd.DataFrame(
+                [
+                    {
+                        "Widok": "Referencyjny tydzien",
+                        "Tydzien ISO": reference_week_label,
+                        "Aktualny release": (
+                            f"{float(reference_row['Quantity_Curr']):,.0f}"
+                            if reference_row is not None
+                            else "0"
+                        ),
+                        "Poprzedni release": (
+                            f"{float(reference_row['Quantity_Prev']):,.0f}"
+                            if reference_row is not None
+                            else "0"
+                        ),
+                        "Delta release": reference_release_delta,
+                        "Zmiana release %": reference_release_pct,
+                        "Delta WoW": reference_wow_delta,
+                        "Zmiana WoW %": reference_wow_pct,
+                    },
+                    {
+                        "Widok": "Poprzedni tydzien",
+                        "Tydzien ISO": previous_week_label,
+                        "Aktualny release": (
+                            f"{float(previous_week_row['Quantity_Curr']):,.0f}"
+                            if previous_week_row is not None
+                            else "0"
+                        ),
+                        "Poprzedni release": (
+                            f"{float(previous_week_row['Quantity_Prev']):,.0f}"
+                            if previous_week_row is not None
+                            else "0"
+                        ),
+                        "Delta release": (
+                            format_signed_int(previous_week_row["Delta"])
+                            if previous_week_row is not None
+                            else "+0"
+                        ),
+                        "Zmiana release %": (
+                            format_percent_display(previous_week_row["Release Percent Label"])
+                            if previous_week_row is not None
+                            else "n/a"
+                        ),
+                        "Delta WoW": (
+                            format_signed_int(previous_week_row["WoW Delta"])
+                            if previous_week_row is not None
+                            else "+0"
+                        ),
+                        "Zmiana WoW %": (
+                            format_percent_display(previous_week_row["WoW Percent Label"])
+                            if previous_week_row is not None
+                            else "n/a"
+                        ),
+                    },
+                ]
+            )
+            st.subheader("Porownanie tygodni")
+            st.dataframe(weekly_focus, use_container_width=True, height=240)
+
+        weekly_table = prepare_weekly_display_table(weekly_summary)
+        st.subheader("Tabela tygodniowa")
+        st.dataframe(weekly_table, use_container_width=True, height=420)
+
+    with product_tab:
+        st.subheader("Analiza wybranego produktu")
+        selected_product_label = st.selectbox(
+            "Wybierz produkt",
+            options=product_summary["Product Label"].tolist(),
+        )
+        product_detail = filtered_df[
+            filtered_df["Product Label"] == selected_product_label
+        ].sort_values(date_basis)
+        product_date_summary = summarize_dates(product_detail, date_basis)
+
+        product_metrics = st.columns(4)
+        product_metrics[0].metric(
+            "Poprzednia ilosc", f"{product_detail['Quantity_Prev'].sum():,.0f}"
+        )
+        product_metrics[1].metric(
+            "Aktualna ilosc", f"{product_detail['Quantity_Curr'].sum():,.0f}"
+        )
+        product_metrics[2].metric(
+            "Bilans zmian", f"{product_detail['Delta'].sum():+,.0f}"
+        )
+        product_metrics[3].metric("Liczba alertow", int(product_detail["Alert"].sum()))
+
+        render_chart_table_switch(
+            "product_quantity",
+            build_quantity_chart(product_date_summary, get_date_label(date_basis)),
+            product_date_summary,
+            table_height=320,
+        )
+        render_chart_table_switch(
+            "product_delta",
+            build_delta_chart(product_date_summary, get_date_label(date_basis)),
+            product_date_summary,
+            table_height=320,
+        )
+
+        product_weekly_summary = build_weekly_summary(
+            product_detail,
+            date_basis,
+            selected_start_date,
+            selected_end_date,
+            selected_end_date,
+            THRESHOLD,
+        )
+        st.subheader("Tygodnie ISO dla produktu")
+        product_weekly_chart = build_weekly_quantity_chart(product_weekly_summary)
+        render_chart_table_switch(
+            "product_weekly",
+            product_weekly_chart,
+            prepare_weekly_display_table(product_weekly_summary),
+            chart_empty_message="Brak danych tygodniowych dla wybranego produktu.",
+            table_height=280,
+        )
+
+        product_table = product_detail[available_detail_columns(product_detail)].copy()
+        product_table["Ship Date"] = product_table["Ship Date"].dt.strftime("%Y-%m-%d")
+        product_table["Receipt Date"] = product_table["Receipt Date"].dt.strftime("%Y-%m-%d")
+        product_table["Change Direction"] = product_table["Change Direction"].map(
+            get_change_label
+        )
+        product_table["Alert"] = product_table["Alert"].map(
+            lambda value: "Tak" if value else "Nie"
+        )
+        product_table = product_table.rename(
+            columns={
+                "Part Number": "Numer czesci",
+                "Part Description": "Opis produktu",
+                "Origin Doc": "Origin Doc",
+                "Item": "Pozycja",
+                "Ship To": "Ship-to",
+                "Customer Material": "Material klienta",
+                "Unrestricted Qty": "Ilosc unrestr.",
+                "Unloading Point": "Punkt rozladunku",
+                "Ship Date": "Data wysylki",
+                "Receipt Date": "Data odbioru",
+                "Unit of Measure": "JM",
+                "CumQty": "CumQty",
+                "Quantity_Prev": "Poprzednia ilosc",
+                "Quantity_Curr": "Aktualna ilosc",
+                "Delta": "Zmiana ilosci",
+                "Percent Change": "Zmiana %",
+                "Demand Status": "Status popytu",
+                "Change Direction": "Kierunek zmiany",
+                "Alert": "Alert",
+            }
+        )
+        st.dataframe(product_table, use_container_width=True, height=360)
+
+    with matrix_tab:
+        st.subheader("Macierz podobna do arkusza release'u")
+        matrix_metric = st.radio(
+            "Metryka",
+            options=["Current Quantity", "Previous Quantity", "Delta", "Percent Change"],
+            horizontal=True,
+            format_func=get_metric_label,
+        )
+        matrix = build_matrix(filtered_df, date_basis, matrix_metric)
+        matrix_cells = matrix.shape[0] * max(matrix.shape[1], 1)
+
+        if matrix.empty:
+            st.info("Brak danych do macierzy.")
+        elif matrix_cells <= MAX_MATRIX_STYLE_CELLS:
+            st.dataframe(
+                style_matrix(matrix, matrix_metric),
+                use_container_width=True,
+                height=520,
+            )
+        else:
+            st.info(
+                "Macierz jest zbyt duza do stylowania, dlatego pokazuje ja bez dodatkowego formatowania."
+            )
+            st.dataframe(matrix, use_container_width=True, height=520)
+
+    with detail_tab:
+        st.subheader("Dane szczegolowe")
+        preview_limit = st.selectbox(
+            "Liczba wierszy w podgladzie",
+            options=[100, 250, 500, 1000],
+            index=2,
+        )
+        detail_table = filtered_df[available_detail_columns(filtered_df)].copy()
+        detail_table["Ship Date"] = detail_table["Ship Date"].dt.strftime("%Y-%m-%d")
+        detail_table["Receipt Date"] = detail_table["Receipt Date"].dt.strftime("%Y-%m-%d")
+        detail_table["Change Direction"] = detail_table["Change Direction"].map(
+            get_change_label
+        )
+        detail_table["Alert"] = detail_table["Alert"].map(
+            lambda value: "Tak" if value else "Nie"
+        )
+        detail_table = detail_table.rename(
+            columns={
+                "PO Number": "Numer PO",
+                "Origin Doc": "Origin Doc",
+                "Item": "Pozycja",
+                "Ship To": "Ship-to",
+                "Part Number": "Numer czesci",
+                "Part Description": "Opis produktu",
+                "Customer Material": "Material klienta",
+                "Unrestricted Qty": "Ilosc unrestr.",
+                "Unloading Point": "Punkt rozladunku",
+                "Ship Date": "Data wysylki",
+                "Receipt Date": "Data odbioru",
+                "Unit of Measure": "JM",
+                "CumQty": "CumQty",
+                "Quantity_Prev": "Poprzednia ilosc",
+                "Quantity_Curr": "Aktualna ilosc",
+                "Delta": "Zmiana ilosci",
+                "Percent Change": "Zmiana %",
+                "Demand Status": "Status popytu",
+                "Change Direction": "Kierunek zmiany",
+                "Alert": "Alert",
+            }
+        )
+
+        if len(detail_table) > preview_limit:
+            st.info(
+                f"Pokazuje pierwsze {preview_limit} z {len(detail_table)} wierszy. "
+                "Pelny raport jest dostepny do pobrania."
+            )
+        st.dataframe(
+            detail_table.head(preview_limit),
+            use_container_width=True,
+            height=420,
+        )
+
+        current_matrix_for_export = build_matrix(filtered_df, date_basis, "Current Quantity")
+        delta_matrix_for_export = build_matrix(filtered_df, date_basis, "Delta")
+        excel_bytes = to_excel_bytes(
+            filtered_df,
+            weekly_summary,
+            current_matrix_for_export,
+            delta_matrix_for_export,
+            prev_meta,
+            curr_meta,
+            product_summary,
+            date_basis,
+            selected_start_date,
+            selected_end_date,
+            key_findings,
+        )
+        csv_bytes = detail_table.to_csv(index=False).encode("utf-8")
+
+        download_left, download_right = st.columns(2)
+        with download_left:
+            st.download_button(
+                "Pobierz filtrowane dane CSV",
+                data=csv_bytes,
+                file_name="pjoter_development_release_change_filtered.csv",
+                mime="text/csv",
+            )
+        with download_right:
+            st.download_button(
+                "Pobierz raport Excel",
+                data=excel_bytes,
+                file_name="pjoter_development_release_change_report.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
 
 
 @st.cache_data(show_spinner=False)
@@ -2316,6 +3222,150 @@ init_auth_state()
 if not st.session_state["authenticated"]:
     render_login_screen()
     st.stop()
+
+app_sidebar, app_main = st.columns([0.28, 0.72], gap="large")
+
+with app_main:
+    upload_left, upload_right = st.columns(2, gap="large")
+    with upload_left:
+        render_upload_card(
+            "Krok 1",
+            "Poprzedni release / poprzedni plan",
+            "Dodaj bazowy plik Excel, do ktorego bedzie porownywany aktualny stan zamowien i wysylek.",
+        )
+        prev_file = st.file_uploader(
+            "Upload Previous Release",
+            type=["xlsx"],
+            key="previous_release_upload",
+            label_visibility="collapsed",
+        )
+    with upload_right:
+        render_upload_card(
+            "Krok 2",
+            "Aktualny release / aktualny plan",
+            "Dodaj nowy plik Excel, aby dashboard automatycznie policzyl delty, alerty i zmiany procentowe.",
+        )
+        current_file = st.file_uploader(
+            "Upload Current Release",
+            type=["xlsx"],
+            key="current_release_upload",
+            label_visibility="collapsed",
+        )
+
+if prev_file is None and current_file is None:
+    with app_sidebar:
+        render_welcome_side_panel(prev_file, current_file)
+    with app_main:
+        quick_cols = st.columns(3, gap="large")
+        with quick_cols[0]:
+            render_quick_card(
+                "Czytelny dashboard porownawczy",
+                "Aplikacja zestawia poprzedni i aktualny release, od razu pokazujac bilans zmian, alerty oraz produkty z najwiekszym ruchem.",
+            )
+        with quick_cols[1]:
+            render_quick_card(
+                "Macierz podobna do Excela",
+                "Otrzymujesz widok tabelaryczny z datami, zmianami ilosci i filtrowaniem po produkcie, kierunku ruchu oraz zakresie dat.",
+            )
+        with quick_cols[2]:
+            render_quick_card(
+                "Raport gotowy do wyslania",
+                "Po analizie pobierzesz CSV oraz biznesowy raport Excel z podsumowaniem KPI i kluczowymi zmianami.",
+            )
+        st.info(
+            "Zacznij od dodania dwoch plikow Excel. Po zaladowaniu obu release'ow dashboard uruchomi pelna analize porownawcza."
+        )
+    st.stop()
+
+if prev_file is None or current_file is None:
+    with app_sidebar:
+        render_welcome_side_panel(prev_file, current_file)
+    with app_main:
+        missing_label = "poprzedni" if prev_file is None else "aktualny"
+        loaded_label = "aktualny" if prev_file is None else "poprzedni"
+        st.info(
+            f"Plik {loaded_label} jest juz dodany. Dodaj jeszcze plik {missing_label}, aby uruchomic analize i wygenerowac dashboard."
+        )
+    st.stop()
+
+try:
+    prev_df, prev_meta = load_release(prev_file.getvalue(), prev_file.name)
+    curr_df, curr_meta = load_release(current_file.getvalue(), current_file.name)
+    result = compare_releases(prev_df, curr_df)
+except Exception as exc:
+    with app_sidebar:
+        render_welcome_side_panel(prev_file, current_file)
+    with app_main:
+        st.error(f"Blad: {exc}")
+    st.stop()
+
+brand_context = detect_brand_context(prev_meta, curr_meta)
+with app_sidebar:
+    filter_state = render_analysis_side_panel(result, brand_context)
+
+date_basis = filter_state["date_basis"]
+selected_start_date = filter_state["selected_start_date"]
+selected_end_date = filter_state["selected_end_date"]
+selected_products = filter_state["selected_products"]
+search_term = filter_state["search_term"]
+selected_change_directions = filter_state["selected_change_directions"]
+only_alerts = filter_state["only_alerts"]
+
+filtered_df = result.copy()
+filtered_df = filtered_df[
+    filtered_df[date_basis].dt.date.between(
+        selected_start_date, selected_end_date
+    )
+]
+
+if selected_products:
+    filtered_df = filtered_df[filtered_df["Product Label"].isin(selected_products)]
+else:
+    filtered_df = filtered_df.iloc[0:0]
+
+if search_term.strip():
+    query = search_term.strip().lower()
+    filtered_df = filtered_df[
+        filtered_df["Part Number"].str.lower().str.contains(query, na=False)
+        | filtered_df["Part Description"].str.lower().str.contains(query, na=False)
+    ]
+
+filtered_df = filtered_df[
+    filtered_df["Change Direction"].isin(selected_change_directions)
+]
+
+if only_alerts:
+    filtered_df = filtered_df[filtered_df["Alert"]]
+
+product_summary = summarize_products(filtered_df)
+date_summary = summarize_dates(filtered_df, date_basis)
+weekly_summary = build_weekly_summary(
+    filtered_df,
+    date_basis,
+    selected_start_date,
+    selected_end_date,
+    selected_end_date,
+    THRESHOLD,
+)
+key_findings = build_key_findings(
+    filtered_df, product_summary, date_summary, date_basis
+)
+
+with app_main:
+    render_analysis_main(
+        filtered_df,
+        product_summary,
+        date_summary,
+        weekly_summary,
+        key_findings,
+        prev_meta,
+        curr_meta,
+        date_basis,
+        selected_start_date,
+        selected_end_date,
+    )
+
+st.stop()
 
 render_sidebar_user(st)
 
