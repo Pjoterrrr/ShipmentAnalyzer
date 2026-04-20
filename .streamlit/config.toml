@@ -10,12 +10,11 @@ font = "sans serif"
 headless = true
 runOnSave = false
 maxUploadSize = 300
-enableXsrfProtection = false
+enableXsrfProtection = true
 enableCORS = true
 
 [browser]
 gatherUsageStats = false
-serverAddress = "localhost"
 
 [logger]
 level = "error"
