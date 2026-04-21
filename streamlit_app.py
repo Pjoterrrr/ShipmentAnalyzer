@@ -40,8 +40,6 @@ def resolve_runtime_path(relative_path):
 
 
 LOGO_PATH = resolve_runtime_path(Path("assets") / "logo.png")
-MERCEDES_LOGO_PATH = resolve_runtime_path(Path("assets") / "brand_mercedes.svg")
-TESLA_LOGO_PATH = resolve_runtime_path(Path("assets") / "brand_tesla.svg")
 AUTH_USERS_PATH = resolve_runtime_path(Path("config") / "users.json")
 DATE_OPTIONS = ["Receipt Date", "Ship Date"]
 DATE_LABELS = {
@@ -132,13 +130,71 @@ st.markdown(
         position: sticky;
         top: 1rem;
     }
-    .side-panel-brand {
-        width: 156px;
-        max-width: 100%;
-        height: auto;
-        display: block;
-        margin: 0 0 0.9rem 0;
-        filter: drop-shadow(0 14px 26px rgba(0, 0, 0, 0.28));
+    .file-type-banner {
+        width: 100%;
+        border-radius: 22px;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        overflow: hidden;
+        position: relative;
+        box-shadow: var(--shadow-md);
+        background:
+            linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.01)),
+            linear-gradient(180deg, rgba(20, 27, 39, 0.96), rgba(11, 16, 24, 0.96));
+    }
+    .file-type-banner::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background:
+            linear-gradient(90deg, rgba(255,255,255,0.06), transparent 26%, transparent 74%, rgba(255,255,255,0.04)),
+            radial-gradient(circle at top left, rgba(255,255,255,0.10), transparent 34%);
+        pointer-events: none;
+        opacity: 0.85;
+    }
+    .file-type-banner--sidebar {
+        min-height: 108px;
+        margin: 0 0 0.95rem 0;
+        padding: 0.9rem 1rem;
+    }
+    .file-type-banner--header {
+        min-height: 118px;
+        padding: 1rem 1.15rem;
+    }
+    .file-type-banner--tesla {
+        background:
+            linear-gradient(135deg, rgba(193, 199, 208, 0.20), rgba(87, 95, 107, 0.12)),
+            linear-gradient(180deg, rgba(86, 91, 100, 0.96), rgba(51, 56, 64, 0.96));
+    }
+    .file-type-banner--mercedes {
+        background:
+            linear-gradient(135deg, rgba(170, 182, 198, 0.16), rgba(69, 80, 94, 0.10)),
+            linear-gradient(180deg, rgba(41, 52, 66, 0.97), rgba(24, 31, 40, 0.97));
+    }
+    .file-type-banner--audi {
+        background:
+            linear-gradient(135deg, rgba(186, 197, 214, 0.16), rgba(95, 111, 135, 0.10)),
+            linear-gradient(180deg, rgba(47, 57, 72, 0.97), rgba(26, 33, 43, 0.97));
+    }
+    .file-type-banner--default {
+        background:
+            linear-gradient(135deg, rgba(165, 185, 210, 0.13), rgba(71, 92, 122, 0.08)),
+            linear-gradient(180deg, rgba(32, 42, 57, 0.97), rgba(16, 23, 34, 0.97));
+    }
+    .file-type-banner__text {
+        position: relative;
+        z-index: 1;
+        color: #f8fbff;
+        font-family: "Aptos Display", "Segoe UI", "Aptos", "Helvetica Neue", Arial, sans-serif;
+        font-size: clamp(1.15rem, 1.05rem + 0.65vw, 1.85rem);
+        font-weight: 800;
+        letter-spacing: 0.18em;
+        line-height: 1.1;
+        text-transform: uppercase;
+        text-wrap: balance;
     }
     .side-panel-divider {
         border: 0;
@@ -316,31 +372,20 @@ st.markdown(
         line-height: 1;
     }
     .compact-brand-box {
-        min-width: 176px;
+        min-width: 248px;
         border: 1px solid var(--line);
         border-radius: 24px;
-        padding: 0.9rem 1rem;
+        padding: 0.9rem;
         background: rgba(17, 24, 39, 0.72);
         display: grid;
         gap: 0.55rem;
-        justify-items: center;
-        text-align: center;
-    }
-    .compact-brand-logo {
-        width: 112px;
-        max-width: 100%;
-        height: auto;
-        display: block;
-    }
-    .compact-brand-label {
-        color: var(--ink);
-        font-size: 0.92rem;
-        font-weight: 800;
+        align-content: start;
     }
     .compact-brand-copy {
         color: var(--muted);
         font-size: 0.78rem;
         line-height: 1.45;
+        text-align: center;
     }
     .brand-badge {
         display: inline-flex;
@@ -1181,13 +1226,26 @@ def detect_brand_context(*metas):
     }
     joined_names = " ".join(file_names)
 
+    if "cw_weekly_pivot" in file_types or any(
+        keyword in joined_names for keyword in ["audi", "q7", "q9", "megatech"]
+    ):
+        return {
+            "brand_key": "audi",
+            "label": "Audi Q7/Q9",
+            "status": "Klient: Audi Q7/Q9",
+            "format_copy": "Rozpoznano tygodniowy format CW / Audi Q7/Q9.",
+            "banner_text": "AUDI Q7/Q9",
+            "banner_theme": "audi",
+        }
+
     if any(keyword in joined_names for keyword in ["mercedes", "merc", "vl10e"]) or "vl10e_block" in file_types:
         return {
             "brand_key": "mercedes",
-            "label": "Mercedes",
-            "status": "Klient: Mercedes",
+            "label": "Mercedes-Benz",
+            "status": "Klient: Mercedes-Benz",
             "format_copy": "Rozpoznano plik VL10E / Mercedes.",
-            "logo_uri": asset_data_uri(MERCEDES_LOGO_PATH),
+            "banner_text": "MERCEDES-BENZ",
+            "banner_theme": "mercedes",
         }
 
     if any(keyword in joined_names for keyword in ["releasedata", "tesla"]) or (
@@ -1198,15 +1256,17 @@ def detect_brand_context(*metas):
             "label": "Tesla",
             "status": "Klient: Tesla / ReleaseData",
             "format_copy": "Rozpoznano plik ReleaseData / legacy wide.",
-            "logo_uri": asset_data_uri(TESLA_LOGO_PATH),
+            "banner_text": "TESLA",
+            "banner_theme": "tesla",
         }
 
     return {
         "brand_key": "default",
-        "label": "Analyzer",
+        "label": "Analytics Dashboard",
         "status": "Klient: neutralny",
         "format_copy": "Brak dedykowanej marki dla załadowanego pliku.",
-        "logo_uri": logo_data_uri(),
+        "banner_text": "ANALYTICS DASHBOARD",
+        "banner_theme": "default",
     }
 
 
@@ -1219,30 +1279,42 @@ def describe_format_context(*metas):
     if not file_types:
         return "Oczekiwanie na dwa pliki wejściowe."
     unique_types = sorted(set(file_types))
+    if unique_types == ["cw_weekly_pivot"]:
+        return "Format: Weekly pivot"
     if unique_types == ["vl10e_block"]:
         return "Format: VL10E block"
     if unique_types == ["legacy_wide"]:
         return "Format: Legacy wide"
+    if set(unique_types) == {"cw_weekly_pivot", "legacy_wide"}:
+        return "Format: daily + weekly"
     return "Format: mixed / mixed release sources"
 
 
+def build_file_type_banner_markup(brand_context, variant="sidebar"):
+    banner_text = html.escape(str(brand_context.get("banner_text", "ANALYTICS DASHBOARD")))
+    banner_theme = html.escape(str(brand_context.get("banner_theme", "default")))
+    banner_variant = "header" if variant == "header" else "sidebar"
+    return f"""
+        <div class="file-type-banner file-type-banner--{banner_variant} file-type-banner--{banner_theme}">
+            <div class="file-type-banner__text">{banner_text}</div>
+        </div>
+    """
+
+
+def render_file_type_banner(brand_context, target=st, variant="sidebar"):
+    target.markdown(
+        build_file_type_banner_markup(brand_context, variant=variant),
+        unsafe_allow_html=True,
+    )
+
+
 def render_side_panel_brand(brand_context):
-    logo_uri = brand_context.get("logo_uri", "")
-    if logo_uri:
-        st.markdown(
-            f'<img class="side-panel-brand" src="{logo_uri}" alt="{html.escape(brand_context.get("label", BRAND_NAME))} logo" />',
-            unsafe_allow_html=True,
-        )
+    render_file_type_banner(brand_context, variant="sidebar")
 
 
 def render_compact_header(brand_context, prev_meta, curr_meta, date_basis, selected_start_date, selected_end_date):
     format_context = describe_format_context(prev_meta, curr_meta)
-    logo_uri = brand_context.get("logo_uri", "")
-    brand_logo_html = (
-        f'<img class="compact-brand-logo" src="{logo_uri}" alt="{html.escape(brand_context.get("label", BRAND_NAME))} logo" />'
-        if logo_uri
-        else f'<div class="brand-badge">{html.escape(brand_context.get("label", BRAND_NAME))}</div>'
-    )
+    brand_banner_html = build_file_type_banner_markup(brand_context, variant="header")
     st.markdown(
         f"""
         <div class="compact-header">
@@ -1261,8 +1333,7 @@ def render_compact_header(brand_context, prev_meta, curr_meta, date_basis, selec
                 </div>
             </div>
             <div class="compact-brand-box">
-                {brand_logo_html}
-                <div class="compact-brand-label">{html.escape(brand_context.get('label', BRAND_NAME))}</div>
+                {brand_banner_html}
                 <div class="compact-brand-copy">{html.escape(curr_meta.get('file_name', ''))}</div>
             </div>
         </div>

@@ -11,8 +11,8 @@ from analytics_calendar import build_weekly_summary
 from release_loader import compare_releases, detect_file_type, load_release
 
 
-def build_legacy_workbook(
-    open_quantity: float = 120.0,
+def build_legacy_workbook_from_rows(
+    rows: list[dict[str, object]],
     raw_sheet_name: str = "Raw",
     include_overview: bool = True,
 ) -> bytes:
@@ -25,7 +25,22 @@ def build_legacy_workbook(
             }
         ]
     )
-    raw_df = pd.DataFrame(
+    raw_df = pd.DataFrame(rows)
+
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        if include_overview:
+            overview_df.to_excel(writer, sheet_name="Overview", startrow=4, index=False)
+        raw_df.to_excel(writer, sheet_name=raw_sheet_name, index=False)
+
+    return output.getvalue()
+
+
+def build_legacy_workbook(
+    open_quantity: float = 120.0,
+    raw_sheet_name: str = "Raw",
+    include_overview: bool = True,
+) -> bytes:
+    return build_legacy_workbook_from_rows(
         [
             {
                 "PO Number": "PO-LEG-1",
@@ -39,15 +54,10 @@ def build_legacy_workbook(
                 "Open Quantity": open_quantity,
                 "Unit of Measure": "EA",
             }
-        ]
+        ],
+        raw_sheet_name=raw_sheet_name,
+        include_overview=include_overview,
     )
-
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        if include_overview:
-            overview_df.to_excel(writer, sheet_name="Overview", startrow=4, index=False)
-        raw_df.to_excel(writer, sheet_name=raw_sheet_name, index=False)
-
-    return output.getvalue()
 
 
 def build_vl10e_workbook(
@@ -127,13 +137,46 @@ def build_vl10e_workbook(
     return output.getvalue()
 
 
+def build_weekly_pivot_workbook() -> bytes:
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = "Sheet2"
+
+    worksheet["C1"] = 2026
+    worksheet["F1"] = 2027
+
+    worksheet["A2"] = "Row Labels"
+    worksheet["C2"] = "backlog"
+    worksheet["D2"] = 17
+    worksheet["E2"] = 18
+    worksheet["F2"] = 1
+
+    worksheet["A3"] = "MAT-001"
+    worksheet["C3"] = 5
+    worksheet["D3"] = 100
+    worksheet["E3"] = 50
+    worksheet["F3"] = 70
+
+    worksheet["A4"] = "MAT-002"
+    worksheet["C4"] = 0
+    worksheet["D4"] = 30
+    worksheet["E4"] = 10
+    worksheet["F4"] = 20
+
+    output = io.BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
 class ReleaseLoaderTests(unittest.TestCase):
-    def test_detect_file_type_recognizes_both_formats(self) -> None:
+    def test_detect_file_type_recognizes_all_formats(self) -> None:
         legacy_bytes = build_legacy_workbook()
         vl10e_bytes = build_vl10e_workbook()
+        weekly_bytes = build_weekly_pivot_workbook()
 
         self.assertEqual(detect_file_type(legacy_bytes), "legacy_wide")
         self.assertEqual(detect_file_type(vl10e_bytes), "vl10e_block")
+        self.assertEqual(detect_file_type(weekly_bytes), "cw_weekly_pivot")
 
     def test_detect_file_type_uses_first_sheet_when_raw_is_missing(self) -> None:
         legacy_without_raw = build_legacy_workbook(
@@ -185,6 +228,28 @@ class ReleaseLoaderTests(unittest.TestCase):
         self.assertEqual(dataframe.iloc[0]["Item"], "10")
         self.assertEqual(dataframe.iloc[0]["Part Number"], "MAT-001")
         self.assertEqual(dataframe.iloc[0]["PO Number"], "PO-VL-1")
+
+    def test_load_release_supports_weekly_pivot_format(self) -> None:
+        weekly_bytes = build_weekly_pivot_workbook()
+
+        dataframe, metadata = load_release(weekly_bytes, "CW17_Megatech Q7Q9.xlsx")
+
+        self.assertEqual(metadata["file_type"], "cw_weekly_pivot")
+        self.assertEqual(metadata["sheet_name"], "Sheet2")
+        self.assertEqual(metadata["release_version"], "2026-04-20")
+        self.assertEqual(str(pd.Timestamp(metadata["release_date"]).date()), "2026-04-20")
+
+        mat001 = dataframe[dataframe["Part Number"] == "MAT-001"].reset_index(drop=True)
+        self.assertEqual(mat001["Week Label"].tolist(), ["2026-W17", "2026-W18", "2027-W01"])
+        self.assertEqual(mat001["ISO Year"].tolist(), [2026, 2026, 2027])
+        self.assertEqual(mat001["ISO Week"].tolist(), [17, 18, 1])
+        self.assertEqual(mat001["Open Quantity"].tolist(), [100.0, 50.0, 70.0])
+        self.assertEqual(mat001["Backlog"].tolist(), [5.0, 5.0, 5.0])
+        self.assertTrue((mat001["Time Bucket"] == "weekly").all())
+        self.assertEqual(
+            mat001["Receipt Date"].dt.strftime("%Y-%m-%d").tolist(),
+            ["2026-04-20", "2026-04-27", "2027-01-04"],
+        )
 
     def test_load_release_returns_readable_error_for_invalid_file(self) -> None:
         with self.assertRaisesRegex(ValueError, "Nie udało się odczytać pliku Excel"):
@@ -241,6 +306,51 @@ class ReleaseLoaderTests(unittest.TestCase):
         self.assertEqual(float(week_17["Quantity_Curr"]), 140.0)
         self.assertEqual(float(week_18["Quantity_Prev"]), 40.0)
         self.assertEqual(float(week_18["Quantity_Curr"]), 0.0)
+
+    def test_compare_releases_rolls_daily_data_up_to_week_when_weekly_file_is_used(self) -> None:
+        legacy_rows = [
+            {
+                "PO Number": "PO-LEG-1",
+                "PO Line #": "10",
+                "Release Version": "15",
+                "Release Date": pd.Timestamp("2026-04-18"),
+                "Part Number": "MAT-001",
+                "Part Description": "Daily Product",
+                "Ship Date": pd.Timestamp("2026-04-20"),
+                "Receipt Date": pd.Timestamp("2026-04-21"),
+                "Open Quantity": 30.0,
+                "Unit of Measure": "EA",
+            },
+            {
+                "PO Number": "PO-LEG-2",
+                "PO Line #": "20",
+                "Release Version": "15",
+                "Release Date": pd.Timestamp("2026-04-18"),
+                "Part Number": "MAT-001",
+                "Part Description": "Daily Product",
+                "Ship Date": pd.Timestamp("2026-04-21"),
+                "Receipt Date": pd.Timestamp("2026-04-22"),
+                "Open Quantity": 70.0,
+                "Unit of Measure": "EA",
+            },
+        ]
+        legacy_bytes = build_legacy_workbook_from_rows(legacy_rows)
+        weekly_bytes = build_weekly_pivot_workbook()
+
+        prev_df, _ = load_release(legacy_bytes, "legacy release 2026-04-18.xlsx")
+        curr_df, _ = load_release(weekly_bytes, "CW17_Megatech Q7Q9.xlsx")
+        result = compare_releases(prev_df, curr_df, threshold=15)
+
+        mat001_week17 = result[
+            (result["Part Number"] == "MAT-001")
+            & (result["Week Label"] == "2026-W17")
+        ].iloc[0]
+
+        self.assertEqual(float(mat001_week17["Quantity_Prev"]), 100.0)
+        self.assertEqual(float(mat001_week17["Quantity_Curr"]), 100.0)
+        self.assertEqual(float(mat001_week17["Delta"]), 0.0)
+        self.assertEqual(mat001_week17["Demand Status"], "")
+        self.assertEqual(str(pd.Timestamp(mat001_week17["Receipt Date"]).date()), "2026-04-20")
 
 
 if __name__ == "__main__":

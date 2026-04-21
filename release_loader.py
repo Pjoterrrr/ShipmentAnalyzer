@@ -22,6 +22,8 @@ LEGACY_REQUIRED_RAW_COLUMNS = [
     "Unit of Measure",
 ]
 
+WEEKLY_PIVOT_SHEET_NAME = "Sheet2"
+
 NORMALIZED_COLUMNS = [
     "source_file",
     "snapshot_date",
@@ -39,6 +41,11 @@ NORMALIZED_COLUMNS = [
     "open_qty",
     "cum_qty",
     "unit",
+    "iso_year",
+    "iso_week",
+    "week_label",
+    "time_bucket",
+    "backlog",
 ]
 
 COMPARISON_SCHEMA_MAP = {
@@ -56,6 +63,11 @@ COMPARISON_SCHEMA_MAP = {
     "open_qty": "Open Quantity",
     "cum_qty": "CumQty",
     "unit": "Unit of Measure",
+    "iso_year": "ISO Year",
+    "iso_week": "ISO Week",
+    "week_label": "Week Label",
+    "time_bucket": "Time Bucket",
+    "backlog": "Backlog",
     "snapshot_date": "Snapshot Date",
     "source_file": "Source File",
 }
@@ -74,9 +86,14 @@ COMPARISON_COLUMN_ORDER = [
     "Unloading Point",
     "Ship Date",
     "Receipt Date",
+    "ISO Year",
+    "ISO Week",
+    "Week Label",
     "Open Quantity",
+    "Backlog",
     "CumQty",
     "Unit of Measure",
+    "Time Bucket",
     "Release Version",
     "Release Date",
 ]
@@ -135,6 +152,32 @@ def _to_timestamp(value: Any) -> pd.Timestamp | pd.NaT:
         return pd.Timestamp(value)
     parsed = pd.to_datetime(value, errors="coerce", dayfirst=False)
     return parsed if not pd.isna(parsed) else pd.NaT
+
+
+def _build_week_label(year_value: Any, week_value: Any) -> str | pd.NA:
+    if pd.isna(year_value) or pd.isna(week_value):
+        return pd.NA
+    return f"{int(year_value)}-W{int(week_value):02d}"
+
+
+def _parse_year_value(value: Any) -> int | None:
+    numeric = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+    if pd.isna(numeric):
+        return None
+    year_value = int(numeric)
+    if 2000 <= year_value <= 2100:
+        return year_value
+    return None
+
+
+def _parse_week_value(value: Any) -> int | None:
+    numeric = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+    if pd.isna(numeric):
+        return None
+    week_value = int(numeric)
+    if 1 <= week_value <= 53:
+        return week_value
+    return None
 
 
 def _is_blank_row(values: tuple[Any, ...]) -> bool:
@@ -243,6 +286,45 @@ def _read_overview_sheet(workbook_info: dict[str, Any]) -> pd.DataFrame:
     return overview_df
 
 
+def _sheet_for_weekly_pivot(workbook_info: dict[str, Any]) -> str:
+    if WEEKLY_PIVOT_SHEET_NAME in workbook_info["sheet_names"]:
+        return WEEKLY_PIVOT_SHEET_NAME
+    return workbook_info["selected_sheet"]
+
+
+def _looks_like_weekly_pivot(
+    workbook_info: dict[str, Any],
+    sheet_name: str | None = None,
+) -> bool:
+    candidate_sheet = sheet_name or _sheet_for_weekly_pivot(workbook_info)
+    preview = _read_sheet(workbook_info, candidate_sheet, header=None, nrows=6)
+    if preview.empty or len(preview.index) < 3:
+        return False
+
+    row_years = preview.iloc[0].ffill()
+    row_headers = preview.iloc[1]
+    row_values = preview.iloc[2]
+    normalized_headers = row_headers.map(
+        lambda value: str(value).strip().lower() if pd.notna(value) else ""
+    )
+
+    if normalized_headers.iloc[0] != "row labels":
+        return False
+    if "backlog" not in set(normalized_headers):
+        return False
+
+    header_years = {year for year in row_years.map(_parse_year_value).tolist() if year is not None}
+    week_columns = [week for week in row_headers.map(_parse_week_value).tolist() if week is not None]
+    if not header_years or not week_columns:
+        return False
+
+    part_number = _normalize_text(row_values.iloc[0])
+    numeric_cells = pd.to_numeric(row_values, errors="coerce")
+    weekly_mask = row_headers.map(_parse_week_value).notna()
+    weekly_qty_cells = numeric_cells[weekly_mask]
+    return not pd.isna(part_number) and weekly_qty_cells.notna().any()
+
+
 def _looks_like_vl10e_block(file_bytes: bytes, sheet_name: str | None = None) -> bool:
     workbook = load_workbook(io.BytesIO(file_bytes), data_only=True, read_only=True)
     if not workbook.sheetnames:
@@ -292,6 +374,13 @@ def detect_file_type(
         pass
 
     try:
+        weekly_sheet = _sheet_for_weekly_pivot(workbook_info)
+        if _looks_like_weekly_pivot(workbook_info, sheet_name=weekly_sheet):
+            return "cw_weekly_pivot"
+    except Exception:
+        pass
+
+    try:
         if _looks_like_vl10e_block(file_bytes, sheet_name=selected_sheet):
             return "vl10e_block"
     except Exception:
@@ -302,7 +391,7 @@ def detect_file_type(
         "Nie rozpoznano struktury pliku Excel. "
         f"Sprawdzono arkusz '{selected_sheet}' "
         f"(dostępne arkusze: {available_sheets}). "
-        "Plik nie pasuje ani do starego formatu legacy, ani do nowego formatu VL10E."
+        "Plik nie pasuje do formatu legacy, VL10E ani tygodniowego pivotu CW."
     )
 
 
@@ -402,6 +491,79 @@ def parse_vl10e_block(
     return pd.DataFrame(rows)
 
 
+def parse_weekly_pivot(
+    file: bytes | bytearray | io.BytesIO | Any,
+    sheet_name: str | None = None,
+    workbook_info: dict[str, Any] | None = None,
+) -> pd.DataFrame:
+    workbook_info = workbook_info or _inspect_workbook(file)
+    selected_sheet = sheet_name or _sheet_for_weekly_pivot(workbook_info)
+    weekly_df = _read_sheet(workbook_info, selected_sheet, header=None)
+    if weekly_df.empty or len(weekly_df.index) < 3:
+        raise ValueError(f"Arkusz '{selected_sheet}' nie zawiera danych tygodniowych.")
+
+    row_years = weekly_df.iloc[0].ffill()
+    row_headers = weekly_df.iloc[1]
+    normalized_headers = row_headers.map(
+        lambda value: str(value).strip().lower() if pd.notna(value) else ""
+    )
+
+    if normalized_headers.iloc[0] != "row labels":
+        raise ValueError(f"Arkusz '{selected_sheet}' nie zawiera kolumny 'Row Labels'.")
+
+    backlog_matches = normalized_headers[normalized_headers.eq("backlog")]
+    backlog_column = int(backlog_matches.index[0]) if not backlog_matches.empty else None
+
+    week_columns: list[tuple[int, int, int]] = []
+    for column_index, week_value in row_headers.items():
+        parsed_week = _parse_week_value(week_value)
+        parsed_year = _parse_year_value(row_years.iloc[column_index])
+        if parsed_week is None or parsed_year is None:
+            continue
+        week_columns.append((int(column_index), parsed_year, parsed_week))
+
+    if not week_columns:
+        raise ValueError(f"Arkusz '{selected_sheet}' nie zawiera poprawnych kolumn year/week.")
+
+    rows: list[dict[str, Any]] = []
+    for row_index in range(2, len(weekly_df.index)):
+        row = weekly_df.iloc[row_index]
+        part_number = _normalize_text(row.iloc[0])
+        if pd.isna(part_number):
+            continue
+        if str(part_number).strip().lower() in {"grand total", "(blank)"}:
+            continue
+
+        backlog_value = pd.NA
+        if backlog_column is not None and backlog_column < len(row):
+            backlog_value = _to_number(row.iloc[backlog_column])
+
+        for column_index, year_value, week_value in week_columns:
+            if column_index >= len(row):
+                continue
+            qty_value = pd.to_numeric(pd.Series([row.iloc[column_index]]), errors="coerce").iloc[0]
+            if pd.isna(qty_value):
+                continue
+
+            week_start = pd.Timestamp(datetime.fromisocalendar(year_value, week_value, 1))
+            rows.append(
+                {
+                    "part_number": part_number,
+                    "year": year_value,
+                    "week": week_value,
+                    "week_label": _build_week_label(year_value, week_value),
+                    "qty": float(qty_value),
+                    "backlog": backlog_value,
+                    "week_start": week_start,
+                }
+            )
+
+    if not rows:
+        raise ValueError(f"Arkusz '{selected_sheet}' nie zawiera wierszy z ilościami tygodniowymi.")
+
+    return pd.DataFrame(rows)
+
+
 def normalize_data(
     parsed_data: pd.DataFrame | dict[str, pd.DataFrame],
     file_type: str,
@@ -479,6 +641,47 @@ def normalize_data(
         normalized["snapshot_date"] = normalized_snapshot
         if "description" in normalized.columns:
             normalized["description"] = normalized["description"].fillna(normalized.get("material"))
+    elif file_type == "cw_weekly_pivot":
+        weekly_df = parsed_data.copy()
+        weekly_df["part_number"] = weekly_df["part_number"].map(_normalize_text)
+        weekly_df["year"] = pd.to_numeric(weekly_df["year"], errors="coerce").astype("Int64")
+        weekly_df["week"] = pd.to_numeric(weekly_df["week"], errors="coerce").astype("Int64")
+        weekly_df["qty"] = pd.to_numeric(weekly_df["qty"], errors="coerce")
+        weekly_df["backlog"] = pd.to_numeric(weekly_df["backlog"], errors="coerce")
+        weekly_df["week_start"] = pd.to_datetime(weekly_df["week_start"], errors="coerce")
+        weekly_df["week_label"] = weekly_df.apply(
+            lambda row: _build_week_label(row["year"], row["week"]),
+            axis=1,
+        )
+
+        if pd.isna(normalized_snapshot):
+            normalized_snapshot = weekly_df["week_start"].dropna().min()
+
+        normalized = pd.DataFrame(
+            {
+                "source_file": source_file,
+                "snapshot_date": normalized_snapshot,
+                "origin_doc": pd.NA,
+                "item": pd.NA,
+                "ship_to": pd.NA,
+                "material": weekly_df["part_number"],
+                "description": pd.NA,
+                "unrestr_qty": pd.NA,
+                "unl_point": pd.NA,
+                "customer_material": pd.NA,
+                "po_number": pd.NA,
+                "gi_date": weekly_df["week_start"],
+                "delivery_date": weekly_df["week_start"],
+                "open_qty": weekly_df["qty"].fillna(0),
+                "cum_qty": pd.NA,
+                "unit": pd.NA,
+                "iso_year": weekly_df["year"],
+                "iso_week": weekly_df["week"],
+                "week_label": weekly_df["week_label"],
+                "time_bucket": "weekly",
+                "backlog": weekly_df["backlog"],
+            }
+        )
     else:
         raise ValueError(f"Unsupported file type: {file_type}")
 
@@ -489,6 +692,19 @@ def normalize_data(
     normalized["open_qty"] = pd.to_numeric(normalized["open_qty"], errors="coerce").fillna(0)
     normalized["unrestr_qty"] = pd.to_numeric(normalized["unrestr_qty"], errors="coerce")
     normalized["cum_qty"] = pd.to_numeric(normalized["cum_qty"], errors="coerce")
+    normalized["backlog"] = pd.to_numeric(normalized["backlog"], errors="coerce")
+
+    delivery_iso = normalized["delivery_date"].dt.isocalendar()
+    normalized["iso_year"] = pd.to_numeric(normalized["iso_year"], errors="coerce").astype("Int64")
+    normalized["iso_week"] = pd.to_numeric(normalized["iso_week"], errors="coerce").astype("Int64")
+    normalized["iso_year"] = normalized["iso_year"].fillna(delivery_iso["year"].astype("Int64"))
+    normalized["iso_week"] = normalized["iso_week"].fillna(delivery_iso["week"].astype("Int64"))
+    normalized["week_label"] = normalized["week_label"].map(_normalize_text)
+    normalized["week_label"] = normalized["week_label"].fillna(
+        normalized.apply(lambda row: _build_week_label(row["iso_year"], row["iso_week"]), axis=1)
+    )
+    normalized["time_bucket"] = normalized["time_bucket"].map(_normalize_text)
+    normalized["time_bucket"] = normalized["time_bucket"].fillna("daily")
 
     normalized = normalized.dropna(subset=["material", "gi_date", "delivery_date"]).copy()
     normalized["description"] = normalized["description"].fillna(normalized["material"])
@@ -513,12 +729,31 @@ def _build_release_version(
 def load_release(file_bytes: bytes, file_name: str) -> tuple[pd.DataFrame, dict[str, Any]]:
     workbook_info = _inspect_workbook(file_bytes)
     file_type = detect_file_type(file_bytes, workbook_info=workbook_info)
-    selected_sheet = workbook_info["selected_sheet"]
-    parsed_data = (
-        parse_legacy_wide(file_bytes, sheet_name=selected_sheet, workbook_info=workbook_info)
-        if file_type == "legacy_wide"
-        else parse_vl10e_block(file_bytes, sheet_name=selected_sheet, workbook_info=workbook_info)
+    selected_sheet = (
+        _sheet_for_weekly_pivot(workbook_info)
+        if file_type == "cw_weekly_pivot"
+        else workbook_info["selected_sheet"]
     )
+    if file_type == "legacy_wide":
+        parsed_data = parse_legacy_wide(
+            file_bytes,
+            sheet_name=selected_sheet,
+            workbook_info=workbook_info,
+        )
+    elif file_type == "vl10e_block":
+        parsed_data = parse_vl10e_block(
+            file_bytes,
+            sheet_name=selected_sheet,
+            workbook_info=workbook_info,
+        )
+    elif file_type == "cw_weekly_pivot":
+        parsed_data = parse_weekly_pivot(
+            file_bytes,
+            sheet_name=selected_sheet,
+            workbook_info=workbook_info,
+        )
+    else:
+        raise ValueError(f"Unsupported file type: {file_type}")
     snapshot_date = _extract_snapshot_date(file_name)
     normalized_df = normalize_data(parsed_data, file_type=file_type, source_file=file_name, snapshot_date=snapshot_date)
     normalized_snapshot = normalized_df["snapshot_date"].dropna().min()
@@ -528,7 +763,10 @@ def load_release(file_bytes: bytes, file_name: str) -> tuple[pd.DataFrame, dict[
     comparison_df["Release Version"] = _build_release_version(
         file_type, file_name, parsed_data, normalized_snapshot
     )
-    comparison_df = comparison_df.reindex(columns=COMPARISON_COLUMN_ORDER)
+    ordered_columns = COMPARISON_COLUMN_ORDER + [
+        column for column in comparison_df.columns if column not in COMPARISON_COLUMN_ORDER
+    ]
+    comparison_df = comparison_df.reindex(columns=ordered_columns)
 
     overview_df = parsed_data["overview"] if file_type == "legacy_wide" else pd.DataFrame()
     po_value = (
@@ -571,32 +809,164 @@ def _has_meaningful_values(*series_collection: pd.Series) -> bool:
 
 
 def _comparison_keys(prev_df: pd.DataFrame, curr_df: pd.DataFrame) -> list[str]:
-    candidate_keys = [
+    use_weekly_bucket = _requires_weekly_rollup(prev_df, curr_df)
+    candidate_keys = (
+        [
+            "PO Number",
+            "Origin Doc",
+            "Item",
+            "Ship To",
+            "Part Number",
+            "Customer Material",
+            "Unloading Point",
+            "ISO Year",
+            "ISO Week",
+            "Week Label",
+        ]
+        if use_weekly_bucket
+        else [
+            "PO Number",
+            "Origin Doc",
+            "Item",
+            "Ship To",
+            "Part Number",
+            "Part Description",
+            "Customer Material",
+            "Unloading Point",
+            "Ship Date",
+            "Receipt Date",
+        ]
+    )
+    keys: list[str] = []
+    for column in candidate_keys:
+        if column in prev_df.columns and column in curr_df.columns:
+            if use_weekly_bucket:
+                if _has_meaningful_values(prev_df[column]) and _has_meaningful_values(curr_df[column]):
+                    keys.append(column)
+            elif _has_meaningful_values(prev_df[column], curr_df[column]):
+                keys.append(column)
+    if "Part Number" not in keys:
+        keys.append("Part Number")
+    if (
+        not use_weekly_bucket
+        and "Part Description" not in keys
+        and "Part Description" in prev_df.columns
+        and "Part Description" in curr_df.columns
+    ):
+        keys.append("Part Description")
+    if use_weekly_bucket:
+        for column in ["ISO Year", "ISO Week", "Week Label"]:
+            if column in prev_df.columns and column in curr_df.columns and column not in keys:
+                keys.append(column)
+    else:
+        if "Ship Date" not in keys:
+            keys.append("Ship Date")
+        if "Receipt Date" not in keys:
+            keys.append("Receipt Date")
+    return keys
+
+
+def _ensure_week_bucket_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    enriched = frame.copy()
+    for column in ["Ship Date", "Receipt Date", "Snapshot Date"]:
+        if column in enriched.columns:
+            enriched[column] = pd.to_datetime(enriched[column], errors="coerce")
+
+    anchor_dates = enriched["Receipt Date"].combine_first(enriched["Ship Date"])
+    iso_calendar = anchor_dates.dt.isocalendar()
+    derived_year = iso_calendar["year"].astype("Int64")
+    derived_week = iso_calendar["week"].astype("Int64")
+
+    if "ISO Year" in enriched.columns:
+        enriched["ISO Year"] = pd.to_numeric(enriched["ISO Year"], errors="coerce").astype("Int64")
+        enriched["ISO Year"] = enriched["ISO Year"].fillna(derived_year)
+    else:
+        enriched["ISO Year"] = derived_year
+
+    if "ISO Week" in enriched.columns:
+        enriched["ISO Week"] = pd.to_numeric(enriched["ISO Week"], errors="coerce").astype("Int64")
+        enriched["ISO Week"] = enriched["ISO Week"].fillna(derived_week)
+    else:
+        enriched["ISO Week"] = derived_week
+
+    derived_labels = pd.Series(
+        [
+            _build_week_label(year_value, week_value)
+            for year_value, week_value in zip(enriched["ISO Year"], enriched["ISO Week"])
+        ],
+        index=enriched.index,
+        dtype="object",
+    )
+    if "Week Label" in enriched.columns:
+        enriched["Week Label"] = enriched["Week Label"].map(_normalize_text)
+        enriched["Week Label"] = enriched["Week Label"].fillna(derived_labels)
+    else:
+        enriched["Week Label"] = derived_labels
+
+    if "Time Bucket" in enriched.columns:
+        enriched["Time Bucket"] = enriched["Time Bucket"].map(_normalize_text).fillna("daily")
+    else:
+        enriched["Time Bucket"] = "daily"
+
+    if "Backlog" in enriched.columns:
+        enriched["Backlog"] = pd.to_numeric(enriched["Backlog"], errors="coerce")
+    else:
+        enriched["Backlog"] = pd.NA
+
+    enriched["_Week Start"] = anchor_dates - pd.to_timedelta(anchor_dates.dt.weekday, unit="D")
+    return enriched
+
+
+def _requires_weekly_rollup(prev_df: pd.DataFrame, curr_df: pd.DataFrame) -> bool:
+    for frame in (prev_df, curr_df):
+        if "Time Bucket" not in frame.columns:
+            continue
+        bucket_values = frame["Time Bucket"].dropna().astype(str).str.strip().str.lower()
+        if bucket_values.eq("weekly").any():
+            return True
+    return False
+
+
+def _rollup_to_weekly(frame: pd.DataFrame) -> pd.DataFrame:
+    enriched = _ensure_week_bucket_columns(frame)
+    group_keys: list[str] = []
+    for column in [
         "PO Number",
         "Origin Doc",
         "Item",
         "Ship To",
         "Part Number",
-        "Part Description",
         "Customer Material",
         "Unloading Point",
-        "Ship Date",
-        "Receipt Date",
-    ]
-    keys: list[str] = []
-    for column in candidate_keys:
-        if column in prev_df.columns and column in curr_df.columns:
-            if _has_meaningful_values(prev_df[column], curr_df[column]):
-                keys.append(column)
-    if "Part Number" not in keys:
-        keys.append("Part Number")
-    if "Part Description" not in keys and "Part Description" in prev_df.columns and "Part Description" in curr_df.columns:
-        keys.append("Part Description")
-    if "Ship Date" not in keys:
-        keys.append("Ship Date")
-    if "Receipt Date" not in keys:
-        keys.append("Receipt Date")
-    return keys
+        "ISO Year",
+        "ISO Week",
+        "Week Label",
+    ]:
+        if column in enriched.columns and _has_meaningful_values(enriched[column]):
+            group_keys.append(column)
+
+    if "Part Number" not in group_keys:
+        group_keys.append("Part Number")
+    for column in ["ISO Year", "ISO Week", "Week Label"]:
+        if column not in group_keys and column in enriched.columns:
+            group_keys.append(column)
+
+    weekly = enriched.groupby(group_keys, as_index=False, dropna=False).agg(
+        **{
+            "Part Description": ("Part Description", "first"),
+            "Ship Date": ("_Week Start", "first"),
+            "Receipt Date": ("_Week Start", "first"),
+            "Open Quantity": ("Open Quantity", "sum"),
+            "Unit of Measure": ("Unit of Measure", "first"),
+            "CumQty": ("CumQty", "first"),
+            "Unrestricted Qty": ("Unrestricted Qty", "first"),
+            "Snapshot Date": ("Snapshot Date", "first"),
+            "Source File": ("Source File", "first"),
+            "Backlog": ("Backlog", "first"),
+        }
+    )
+    weekly["Time Bucket"] = "weekly"
+    return weekly
 
 
 def _safe_percent_change(current_value: float, previous_value: float) -> float:
@@ -614,28 +984,43 @@ def _demand_status(previous_qty: float, current_qty: float) -> str:
 
 
 def compare_releases(prev_df: pd.DataFrame, curr_df: pd.DataFrame, threshold: float = 15) -> pd.DataFrame:
+    if _requires_weekly_rollup(prev_df, curr_df):
+        prev_df = _rollup_to_weekly(prev_df)
+        curr_df = _rollup_to_weekly(curr_df)
+
     keys = _comparison_keys(prev_df, curr_df)
 
     prev_summary = prev_df.groupby(keys, as_index=False, dropna=False).agg(
         Quantity_Prev=("Open Quantity", "sum"),
+        PartDescription_Prev=("Part Description", "first"),
+        ShipDate_Prev=("Ship Date", "first"),
+        ReceiptDate_Prev=("Receipt Date", "first"),
         UoM_Prev=("Unit of Measure", "first"),
         CumQty_Prev=("CumQty", "first"),
         UnrestrictedQty_Prev=("Unrestricted Qty", "first"),
         SnapshotDate_Prev=("Snapshot Date", "first"),
         SourceFile_Prev=("Source File", "first"),
+        Backlog_Prev=("Backlog", "first"),
     )
     curr_summary = curr_df.groupby(keys, as_index=False, dropna=False).agg(
         Quantity_Curr=("Open Quantity", "sum"),
+        PartDescription_Curr=("Part Description", "first"),
+        ShipDate_Curr=("Ship Date", "first"),
+        ReceiptDate_Curr=("Receipt Date", "first"),
         UoM_Curr=("Unit of Measure", "first"),
         CumQty_Curr=("CumQty", "first"),
         UnrestrictedQty_Curr=("Unrestricted Qty", "first"),
         SnapshotDate_Curr=("Snapshot Date", "first"),
         SourceFile_Curr=("Source File", "first"),
+        Backlog_Curr=("Backlog", "first"),
     )
 
     merged = prev_summary.merge(curr_summary, on=keys, how="outer")
     merged["Quantity_Prev"] = merged["Quantity_Prev"].fillna(0)
     merged["Quantity_Curr"] = merged["Quantity_Curr"].fillna(0)
+    merged["Part Description"] = merged["PartDescription_Curr"].combine_first(merged["PartDescription_Prev"])
+    merged["Ship Date"] = merged["ShipDate_Curr"].combine_first(merged["ShipDate_Prev"])
+    merged["Receipt Date"] = merged["ReceiptDate_Curr"].combine_first(merged["ReceiptDate_Prev"])
     merged["Unit of Measure"] = merged["UoM_Prev"].combine_first(merged["UoM_Curr"])
     merged["CumQty"] = merged["CumQty_Curr"].combine_first(merged["CumQty_Prev"])
     merged["Unrestricted Qty"] = merged["UnrestrictedQty_Curr"].combine_first(
@@ -645,6 +1030,7 @@ def compare_releases(prev_df: pd.DataFrame, curr_df: pd.DataFrame, threshold: fl
     merged["Snapshot Date Current"] = merged["SnapshotDate_Curr"]
     merged["Source File Previous"] = merged["SourceFile_Prev"]
     merged["Source File Current"] = merged["SourceFile_Curr"]
+    merged["Backlog"] = merged["Backlog_Curr"].combine_first(merged["Backlog_Prev"])
     merged["Delta"] = merged["Quantity_Curr"] - merged["Quantity_Prev"]
     merged["Abs Delta"] = merged["Delta"].abs()
     merged["Percent Change"] = merged.apply(
@@ -668,6 +1054,12 @@ def compare_releases(prev_df: pd.DataFrame, curr_df: pd.DataFrame, threshold: fl
         columns=[
             "UoM_Prev",
             "UoM_Curr",
+            "PartDescription_Prev",
+            "PartDescription_Curr",
+            "ShipDate_Prev",
+            "ShipDate_Curr",
+            "ReceiptDate_Prev",
+            "ReceiptDate_Curr",
             "CumQty_Prev",
             "CumQty_Curr",
             "UnrestrictedQty_Prev",
@@ -676,6 +1068,8 @@ def compare_releases(prev_df: pd.DataFrame, curr_df: pd.DataFrame, threshold: fl
             "SnapshotDate_Curr",
             "SourceFile_Prev",
             "SourceFile_Curr",
+            "Backlog_Prev",
+            "Backlog_Curr",
         ]
     )
     return merged.sort_values(["Receipt Date", "Ship Date", "Part Description"]).reset_index(drop=True)
