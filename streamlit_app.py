@@ -105,7 +105,7 @@ st.markdown(
         color: var(--ink);
     }
     .block-container {
-        padding-top: 1.1rem;
+        padding-top: 1.85rem;
         padding-bottom: 2.6rem;
         max-width: 1540px;
     }
@@ -866,9 +866,11 @@ st.markdown(
         border: 1px solid var(--border-soft);
         border-radius: 22px;
         padding: 0.95rem 1.05rem;
+        margin-top: 0.2rem;
         margin-bottom: 0.9rem;
         background: linear-gradient(180deg, rgba(15, 23, 42, 0.88), rgba(15, 23, 42, 0.62));
         box-shadow: none;
+        overflow: visible;
     }
     .app-shell-kicker,
     .app-header__eyebrow {
@@ -1347,11 +1349,11 @@ st.markdown(
             <div class="app-shell-kicker">Release Intelligence</div>
             <div class="brand-wordmark brand-wordmark--soft">Pjoter Development</div>
             <div class="app-shell-copy">
-                Dashboard porownan release'ow. Upload, filtry i eksport pozostaja w jednym miejscu
+                Dashboard porównań release'ów. Upload, filtry i eksport pozostają w jednym miejscu
                 do codziennej analizy planistycznej i logistycznej.
             </div>
         </div>
-        <div class="app-shell-chip">Workspace</div>
+        <div class="app-shell-chip">Panel pracy</div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -1937,85 +1939,41 @@ def render_welcome_state(prev_file, current_file):
     )
     has_any_file = prev_file is not None or current_file is not None
     title = (
-        "Dodaj dwa pliki, aby uruchomic porownanie release'ow"
+        "Dodaj dwa pliki, aby uruchomić porównanie release'ów"
         if not has_any_file
-        else "Dodaj drugi plik, aby dokonczyc analize"
+        else "Dodaj drugi plik, aby dokończyć analizę"
     )
     subtitle = (
-        "Lewa kolumna sluzy do uploadu, filtrow i eksportu. Po dodaniu kompletu plikow "
-        "dashboard automatycznie pokaze KPI, alerty, wykresy i tabele szczegolowe."
+        "Lewa kolumna służy do uploadu, filtrów i eksportu. Po dodaniu kompletu plików "
+        "dashboard automatycznie pokaże KPI, alerty, wykresy i tabele szczegółowe."
     )
     meta_items = [
         "Upload po lewej stronie",
-        "Porownanie daily i weekly",
+        "Porównanie daily i weekly",
         "Eksport CSV / Excel",
-        "1 / 2 plikow gotowe" if has_any_file else "0 / 2 plikow gotowe",
+        "1 / 2 plików gotowe" if has_any_file else "0 / 2 plików gotowe",
     ]
     render_empty_state_header(brand_context, title, subtitle, meta_items)
 
     render_section_header(
         "Po uruchomieniu analizy",
         "Co zobaczysz w raporcie",
-        "Po lewej stronie zostaje sterowanie analiza, a glowna sekcja skupia sie na wynikach i najwazniejszych sygnalach.",
+        "Po lewej stronie zostaje sterowanie analizą, a główna sekcja skupia się na wynikach i najważniejszych sygnałach.",
     )
     quick_cols = st.columns(3, gap="medium")
     with quick_cols[0]:
         render_quick_card(
             "Szybkie KPI",
-            "Najwazniejsze liczby i sygnaly beda zawsze na gorze raportu, gotowe do szybkiego odczytu.",
+            "Najważniejsze liczby i sygnały będą zawsze na górze raportu, gotowe do szybkiego odczytu.",
         )
     with quick_cols[1]:
         render_quick_card(
             "Alerty i insighty",
-            "Sekcja alertow porzadkuje anomalie, nowe pozycje i zmiany przekraczajace ustalony prog.",
-        )
-    with quick_cols[2]:
-        render_quick_card(
-            "Staly kontekst pracy",
-            "Filtry, upload i eksport pozostaja w jednym miejscu, dzieki czemu dashboard nie gubi kontekstu pracy.",
-        )
-
-    if prev_file is None and current_file is None:
-        st.info("Dodaj dwa pliki Excel w panelu po lewej, aby uruchomic porownanie release'ow.")
-    else:
-        missing_label = "poprzedni" if prev_file is None else "aktualny"
-        st.info(
-            f"Jeden plik jest juz gotowy. Dodaj jeszcze plik {missing_label}, aby uruchomic pelna analize."
-        )
-    return
-    title = "Premium dashboard porównawczy dla release'ów"
-    subtitle = (
-        "Po załadowaniu dwóch plików aplikacja zbuduje raport KPI, alerty, widoki tygodniowe, "
-        "tabele szczegółowe i eksport gotowy do dalszej pracy operacyjnej."
-    )
-    meta_items = [
-        "Upload po lewej stronie",
-        "Porównanie daily i weekly",
-        "Eksport CSV / Excel",
-    ]
-    if prev_file is not None or current_file is not None:
-        meta_items.append("1 / 2 plików gotowe" if prev_file is None or current_file is None else "2 / 2 plików gotowe")
-    render_app_header(brand_context, title, subtitle, meta_items)
-
-    render_section_header(
-        "Jak działa workspace",
-        "Jeden panel do uploadu, filtrów i eksportu",
-        "Lewa kolumna utrzymuje stały kontekst pracy, a prawa część skupia się wyłącznie na wynikach i analizie.",
-    )
-    quick_cols = st.columns(3, gap="medium")
-    with quick_cols[0]:
-        render_quick_card(
-            "Szybkie KPI",
-            "Najważniejsze liczby i sygnały są zawsze na górze raportu, gotowe do szybkiego odczytu.",
-        )
-    with quick_cols[1]:
-        render_quick_card(
-            "Insighty i alerty",
             "Sekcja alertów porządkuje anomalie, nowe pozycje i zmiany przekraczające ustalony próg.",
         )
     with quick_cols[2]:
         render_quick_card(
-            "Stabilny kontekst analizy",
+            "Stały kontekst pracy",
             "Filtry, upload i eksport pozostają w jednym miejscu, dzięki czemu dashboard nie gubi kontekstu pracy.",
         )
 
@@ -2026,6 +1984,7 @@ def render_welcome_state(prev_file, current_file):
         st.info(
             f"Jeden plik jest już gotowy. Dodaj jeszcze plik {missing_label}, aby uruchomić pełną analizę."
         )
+    return
 
 
 def build_detail_export_table(dataframe):
@@ -2660,8 +2619,6 @@ def render_analysis_main(
             "label": "Zakres analizy",
             "value": f"{selected_start_date:%Y-%m-%d} — {selected_end_date:%Y-%m-%d}",
         },
-        {"label": "Poprzedni release", "value": format_release_summary(prev_meta)},
-        {"label": "Aktualny release", "value": format_release_summary(curr_meta)},
     ]
     render_report_metadata(report_metadata)
 
