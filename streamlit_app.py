@@ -6,8 +6,6 @@ import io
 import json
 from pathlib import Path
 import sys
-from textwrap import dedent
-
 import altair as alt
 import pandas as pd
 import streamlit as st
@@ -840,14 +838,14 @@ st.markdown(
     .app-shell-header {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
-        gap: 1rem;
+        gap: 0.85rem;
         align-items: end;
         border: 1px solid var(--border-soft);
-        border-radius: 24px;
-        padding: 1.15rem 1.25rem;
-        margin-bottom: 1rem;
-        background: linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.65));
-        box-shadow: var(--shadow-soft);
+        border-radius: 22px;
+        padding: 0.95rem 1.05rem;
+        margin-bottom: 0.9rem;
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.88), rgba(15, 23, 42, 0.62));
+        box-shadow: none;
     }
     .app-shell-kicker,
     .app-header__eyebrow {
@@ -860,7 +858,7 @@ st.markdown(
     }
     .app-shell-title,
     .app-header__title {
-        font-size: clamp(1.9rem, 1.55rem + 0.8vw, 2.7rem);
+        font-size: clamp(1.45rem, 1.18rem + 0.8vw, 2.35rem);
         font-weight: 800;
         color: var(--text-primary);
         margin-bottom: 0.4rem;
@@ -868,8 +866,8 @@ st.markdown(
     .app-shell-copy,
     .app-header__subtitle {
         color: var(--text-secondary);
-        font-size: 0.97rem;
-        line-height: 1.7;
+        font-size: 0.93rem;
+        line-height: 1.6;
         max-width: 70ch;
     }
     .app-shell-chip {
@@ -880,8 +878,8 @@ st.markdown(
         border: 1px solid rgba(56, 189, 248, 0.22);
         background: rgba(56, 189, 248, 0.08);
         color: var(--text-primary);
-        padding: 0.55rem 0.9rem;
-        font-size: 0.8rem;
+        padding: 0.48rem 0.82rem;
+        font-size: 0.76rem;
         font-weight: 700;
         white-space: nowrap;
     }
@@ -951,6 +949,52 @@ st.markdown(
     .file-type-banner__text {
         letter-spacing: 0.16em !important;
         font-size: clamp(1.05rem, 0.96rem + 0.55vw, 1.55rem) !important;
+    }
+    .empty-state-shell {
+        display: grid;
+        grid-template-columns: minmax(0, 1.25fr) minmax(220px, 280px);
+        gap: 1rem;
+        align-items: stretch;
+        border: 1px solid var(--border-soft);
+        border-radius: 24px;
+        padding: 1.15rem 1.2rem;
+        margin-bottom: 1rem;
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.84), rgba(15, 23, 42, 0.62));
+    }
+    .empty-state-copy {
+        display: flex;
+        flex-direction: column;
+        gap: 0.72rem;
+        justify-content: center;
+        min-width: 0;
+    }
+    .empty-state-kicker {
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+        color: var(--accent-blue);
+        font-weight: 800;
+    }
+    .empty-state-title {
+        color: var(--text-primary);
+        font-size: clamp(1.35rem, 1.12rem + 0.75vw, 2.05rem);
+        font-weight: 800;
+        line-height: 1.2;
+        max-width: 18ch;
+    }
+    .empty-state-subtitle {
+        color: var(--text-secondary);
+        font-size: 0.94rem;
+        line-height: 1.65;
+        max-width: 68ch;
+    }
+    .empty-state-banner {
+        display: flex;
+        align-items: center;
+    }
+    .empty-state-banner .file-type-banner {
+        width: 100%;
+        min-height: 120px;
     }
     .filter-panel-shell,
     .upload-card,
@@ -1262,6 +1306,9 @@ st.markdown(
         .app-shell-header {
             grid-template-columns: 1fr;
         }
+        .empty-state-shell {
+            grid-template-columns: 1fr;
+        }
         .report-metadata-grid {
             grid-template-columns: repeat(2, minmax(0, 1fr));
         }
@@ -1274,14 +1321,14 @@ st.markdown(
     </style>
     <div class="app-shell-header">
         <div>
-            <div class="app-shell-kicker">Premium Release Intelligence</div>
-            <div class="app-shell-title">Nowoczesny dashboard analityczny dla porównań release'ów</div>
+            <div class="app-shell-kicker">Release Intelligence</div>
+            <div class="app-shell-title">Dashboard porownan release'ow</div>
             <div class="app-shell-copy">
-                Upload, filtry, metadane, alerty i eksport działają teraz jako jeden spójny workspace
-                do codziennej pracy z danymi planistycznymi i logistycznymi.
+                Upload, filtry i eksport pozostaja w jednym miejscu do codziennej analizy planistycznej
+                i logistycznej.
             </div>
         </div>
-        <div class="app-shell-chip">Streamlit Analytics Workspace</div>
+        <div class="app-shell-chip">Workspace</div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -1520,16 +1567,14 @@ def render_section_header(kicker, title, copy=None):
         if copy
         else ""
     )
-    st.markdown(
-        f"""
-        <div class="section-head">
-            <div class="section-kicker">{html.escape(str(kicker))}</div>
-            <div class="section-title">{html.escape(str(title))}</div>
-            {copy_html}
-        </div>
-        """,
-        unsafe_allow_html=True,
+    markup = (
+        '<div class="section-head">'
+        f'<div class="section-kicker">{html.escape(str(kicker))}</div>'
+        f'<div class="section-title">{html.escape(str(title))}</div>'
+        f"{copy_html}"
+        "</div>"
     )
+    st.markdown(markup, unsafe_allow_html=True)
 
 
 def render_app_header(brand_context, title, subtitle, meta_items=None, file_caption=""):
@@ -1548,26 +1593,47 @@ def render_app_header(brand_context, title, subtitle, meta_items=None, file_capt
         if file_caption
         else ""
     )
-    header_markup = dedent(
-        f"""
-        <div class="app-header">
-            <div class="app-header__copy">
-                <div class="app-header__eyebrow">Pjoter Development Analytics</div>
-                <div class="app-header__title">{html.escape(str(title))}</div>
-                <div class="app-header__subtitle">{html.escape(str(subtitle))}</div>
-                {chips_html}
-            </div>
-            <div class="app-header__banner">
-{banner_html}
-{caption_html}
-            </div>
-        </div>
-        """
-    ).strip()
-    st.markdown(
-        header_markup,
-        unsafe_allow_html=True,
+    header_markup = (
+        '<div class="app-header">'
+        '<div class="app-header__copy">'
+        '<div class="app-header__eyebrow">Pjoter Development Analytics</div>'
+        f'<div class="app-header__title">{html.escape(str(title))}</div>'
+        f'<div class="app-header__subtitle">{html.escape(str(subtitle))}</div>'
+        f"{chips_html}"
+        "</div>"
+        '<div class="app-header__banner">'
+        f"{banner_html}"
+        f"{caption_html}"
+        "</div>"
+        "</div>"
     )
+    st.markdown(header_markup, unsafe_allow_html=True)
+
+
+def render_empty_state_header(brand_context, title, subtitle, meta_items=None):
+    meta_items = meta_items or []
+    chips_html = "".join(
+        f'<div class="context-chip">{html.escape(str(item))}</div>'
+        for item in meta_items
+        if item
+    )
+    chips_html = (
+        f'<div class="context-chip-row">{chips_html}</div>' if chips_html else ""
+    )
+    markup = (
+        '<div class="empty-state-shell">'
+        '<div class="empty-state-copy">'
+        '<div class="empty-state-kicker">Workspace status</div>'
+        f'<div class="empty-state-title">{html.escape(str(title))}</div>'
+        f'<div class="empty-state-subtitle">{html.escape(str(subtitle))}</div>'
+        f"{chips_html}"
+        "</div>"
+        '<div class="empty-state-banner">'
+        f'{build_file_type_banner_markup(brand_context, variant="header")}'
+        "</div>"
+        "</div>"
+    )
+    st.markdown(markup, unsafe_allow_html=True)
 
 
 def render_report_metadata(items):
@@ -1846,6 +1912,54 @@ def render_welcome_state(prev_file, current_file):
             {"file_name": current_file.name} if current_file is not None else None,
         ] if meta)
     )
+    has_any_file = prev_file is not None or current_file is not None
+    title = (
+        "Dodaj dwa pliki, aby uruchomic porownanie release'ow"
+        if not has_any_file
+        else "Dodaj drugi plik, aby dokonczyc analize"
+    )
+    subtitle = (
+        "Lewa kolumna sluzy do uploadu, filtrow i eksportu. Po dodaniu kompletu plikow "
+        "dashboard automatycznie pokaze KPI, alerty, wykresy i tabele szczegolowe."
+    )
+    meta_items = [
+        "Upload po lewej stronie",
+        "Porownanie daily i weekly",
+        "Eksport CSV / Excel",
+        "1 / 2 plikow gotowe" if has_any_file else "0 / 2 plikow gotowe",
+    ]
+    render_empty_state_header(brand_context, title, subtitle, meta_items)
+
+    render_section_header(
+        "Po uruchomieniu analizy",
+        "Co zobaczysz w raporcie",
+        "Po lewej stronie zostaje sterowanie analiza, a glowna sekcja skupia sie na wynikach i najwazniejszych sygnalach.",
+    )
+    quick_cols = st.columns(3, gap="medium")
+    with quick_cols[0]:
+        render_quick_card(
+            "Szybkie KPI",
+            "Najwazniejsze liczby i sygnaly beda zawsze na gorze raportu, gotowe do szybkiego odczytu.",
+        )
+    with quick_cols[1]:
+        render_quick_card(
+            "Alerty i insighty",
+            "Sekcja alertow porzadkuje anomalie, nowe pozycje i zmiany przekraczajace ustalony prog.",
+        )
+    with quick_cols[2]:
+        render_quick_card(
+            "Staly kontekst pracy",
+            "Filtry, upload i eksport pozostaja w jednym miejscu, dzieki czemu dashboard nie gubi kontekstu pracy.",
+        )
+
+    if prev_file is None and current_file is None:
+        st.info("Dodaj dwa pliki Excel w panelu po lewej, aby uruchomic porownanie release'ow.")
+    else:
+        missing_label = "poprzedni" if prev_file is None else "aktualny"
+        st.info(
+            f"Jeden plik jest juz gotowy. Dodaj jeszcze plik {missing_label}, aby uruchomic pelna analize."
+        )
+    return
     title = "Premium dashboard porównawczy dla release'ów"
     subtitle = (
         "Po załadowaniu dwóch plików aplikacja zbuduje raport KPI, alerty, widoki tygodniowe, "
@@ -2226,13 +2340,12 @@ def build_file_type_banner_markup(brand_context, variant="sidebar"):
     banner_text = html.escape(str(brand_context.get("banner_text", "ANALYTICS DASHBOARD")))
     banner_theme = html.escape(str(brand_context.get("banner_theme", "default")))
     banner_variant = "header" if variant == "header" else "sidebar"
-    return dedent(
-        f"""
-        <div class="file-type-banner file-type-banner--{banner_variant} file-type-banner--{banner_theme}">
-            <div class="file-type-banner__text">{banner_text}</div>
-        </div>
-        """
-    ).strip()
+    return (
+        f'<div class="file-type-banner file-type-banner--{banner_variant} '
+        f'file-type-banner--{banner_theme}">'
+        f'<div class="file-type-banner__text">{banner_text}</div>'
+        "</div>"
+    )
 
 
 def render_file_type_banner(brand_context, target=st, variant="sidebar"):
