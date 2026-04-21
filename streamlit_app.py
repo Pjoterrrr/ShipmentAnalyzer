@@ -6,6 +6,7 @@ import io
 import json
 from pathlib import Path
 import sys
+from textwrap import dedent
 
 import altair as alt
 import pandas as pd
@@ -1547,7 +1548,7 @@ def render_app_header(brand_context, title, subtitle, meta_items=None, file_capt
         if file_caption
         else ""
     )
-    st.markdown(
+    header_markup = dedent(
         f"""
         <div class="app-header">
             <div class="app-header__copy">
@@ -1557,23 +1558,26 @@ def render_app_header(brand_context, title, subtitle, meta_items=None, file_capt
                 {chips_html}
             </div>
             <div class="app-header__banner">
-                {banner_html}
-                {caption_html}
+{banner_html}
+{caption_html}
             </div>
         </div>
-        """,
+        """
+    ).strip()
+    st.markdown(
+        header_markup,
         unsafe_allow_html=True,
     )
 
 
 def render_report_metadata(items):
     cards_html = "".join(
-        f"""
-        <div class="report-meta-card">
-            <div class="report-meta-label">{html.escape(str(item.get('label', '')))}</div>
-            <div class="report-meta-value">{html.escape(str(item.get('value', 'n/a')))}</div>
-        </div>
-        """
+        (
+            '<div class="report-meta-card">'
+            f'<div class="report-meta-label">{html.escape(str(item.get("label", "")))}</div>'
+            f'<div class="report-meta-value">{html.escape(str(item.get("value", "n/a")))}</div>'
+            "</div>"
+        )
         for item in items
     )
     st.markdown(
@@ -1766,14 +1770,14 @@ def render_file_slot_cards(prev_file=None, current_file=None, prev_meta=None, cu
         build_file_slot_payload("Aktualny plik", current_file, curr_meta),
     ]
     markup = "".join(
-        f"""
-        <div class="upload-status-card upload-status-card--{html.escape(str(slot['tone']))}">
-            <div class="upload-status-label">{html.escape(str(slot['slot']))}</div>
-            <div class="upload-status-name">{html.escape(str(slot['name']))}</div>
-            <div class="upload-status-meta">{html.escape(str(slot['status']))} · {html.escape(str(slot['detail']))}</div>
-            <div class="upload-status-caption">{html.escape(str(slot['caption']))}</div>
-        </div>
-        """
+        (
+            f'<div class="upload-status-card upload-status-card--{html.escape(str(slot["tone"]))}">'
+            f'<div class="upload-status-label">{html.escape(str(slot["slot"]))}</div>'
+            f'<div class="upload-status-name">{html.escape(str(slot["name"]))}</div>'
+            f'<div class="upload-status-meta">{html.escape(str(slot["status"]))} | {html.escape(str(slot["detail"]))}</div>'
+            f'<div class="upload-status-caption">{html.escape(str(slot["caption"]))}</div>'
+            "</div>"
+        )
         for slot in slots
     )
     st.markdown(
@@ -2222,11 +2226,13 @@ def build_file_type_banner_markup(brand_context, variant="sidebar"):
     banner_text = html.escape(str(brand_context.get("banner_text", "ANALYTICS DASHBOARD")))
     banner_theme = html.escape(str(brand_context.get("banner_theme", "default")))
     banner_variant = "header" if variant == "header" else "sidebar"
-    return f"""
+    return dedent(
+        f"""
         <div class="file-type-banner file-type-banner--{banner_variant} file-type-banner--{banner_theme}">
             <div class="file-type-banner__text">{banner_text}</div>
         </div>
-    """
+        """
+    ).strip()
 
 
 def render_file_type_banner(brand_context, target=st, variant="sidebar"):
