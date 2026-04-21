@@ -2,29 +2,29 @@ import streamlit as st
 
 
 def render(data, ui):
-    filtered_df = data["filtered_df"]
-    weekly_summary = data["weekly_summary"]
-    product_summary = data["product_summary"]
-    prev_meta = data["prev_meta"]
-    curr_meta = data["curr_meta"]
-    date_basis = data["date_basis"]
-    selected_start_date = data["selected_start_date"]
-    selected_end_date = data["selected_end_date"]
-    key_findings = data["key_findings"]
-    excel_bytes = data.get("excel_bytes")
-    csv_bytes = data.get("csv_bytes")
+    filtered_df = data.filtered_df
+    weekly_summary = data.weekly_summary
+    product_summary = data.product_summary
+    prev_meta = data.prev_meta
+    curr_meta = data.curr_meta
+    date_basis = data.date_basis
+    selected_start_date = data.selected_start_date
+    selected_end_date = data.selected_end_date
+    key_findings = data.key_findings
+    excel_bytes = data.excel_bytes
+    csv_bytes = data.csv_bytes
 
     if filtered_df.empty:
-        st.info("Brak danych szczegółowych dla aktywnych filtrów.")
+        st.info("Brak danych szczegolowych dla aktywnych filtrow.")
         return
 
     ui.render_section_header(
         "Details",
-        "Dane szczegółowe i eksport",
-        "Pełny podgląd przefiltrowanych wierszy do szybkiej walidacji oraz eksportu do dalszej pracy operacyjnej.",
+        "Dane szczegolowe i eksport",
+        "Pelny podglad przefiltrowanych wierszy do szybkiej walidacji oraz eksportu do dalszej pracy operacyjnej.",
     )
     preview_limit = st.selectbox(
-        "Liczba wierszy w podglądzie",
+        "Liczba wierszy w podgladzie",
         options=[100, 250, 500, 1000],
         index=2,
         key="details_preview_limit",
@@ -33,7 +33,7 @@ def render(data, ui):
 
     if len(detail_table) > preview_limit:
         st.info(
-            f"Pokazuje pierwsze {preview_limit} z {len(detail_table)} wierszy. Pełny raport jest dostępny do pobrania."
+            f"Pokazuje pierwsze {preview_limit} z {len(detail_table)} wierszy. Pelny raport jest dostepny do pobrania."
         )
     st.dataframe(
         detail_table.head(preview_limit),

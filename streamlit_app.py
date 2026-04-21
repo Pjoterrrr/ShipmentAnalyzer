@@ -20,20 +20,12 @@ from openpyxl.drawing.image import Image as OpenpyxlImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from modules.admin import render as render_admin_module
+from modules.context import ModuleDataContext
 from modules.dashboard import render as render_dashboard_module
 from modules.details import render as render_details_module
 from modules.planner import render as render_planner_module
 from modules.reports import render as render_reports_module
 from planner_helpers import (
-    build_planner_coverage_chart,
-    build_planner_daily_display,
-    build_planner_display_table,
-    build_planner_excel_bytes,
-    build_planner_input_frame,
-    build_planner_kpis,
-    build_planner_priority_chart,
-    calculate_planner_outputs,
-    planner_inputs_to_state,
     prepare_planner_source,
 )
 from release_loader import compare_releases as compare_release_frames
@@ -85,6 +77,30 @@ MODULE_LABELS = {
     "reports": "Reports",
     "details": "Details",
     "admin": "Admin",
+}
+ROLE_MODULE_PERMISSIONS = {
+    "Admin": {
+        "dashboard": "edit",
+        "planner": "edit",
+        "reports": "edit",
+        "details": "edit",
+        "admin": "edit",
+    },
+    "Planner": {
+        "dashboard": "edit",
+        "planner": "edit",
+        "reports": "edit",
+        "details": "edit",
+    },
+    "Viewer": {
+        "dashboard": "read",
+        "reports": "read",
+    },
+    "Warehouse": {
+        "dashboard": "read",
+        "planner": "read",
+        "reports": "read",
+    },
 }
 
 
@@ -1956,7 +1972,14 @@ def render_export_actions(csv_bytes, excel_bytes):
     )
 
 
-def render_module_navigation():
+def render_module_navigation(auth_user=None):
+    allowed_modules = get_allowed_modules(auth_user=auth_user)
+    if not allowed_modules:
+        allowed_modules = ["dashboard"]
+    current_module = st.session_state.get("active_module")
+    if current_module not in allowed_modules:
+        st.session_state["active_module"] = allowed_modules[0]
+
     render_section_header(
         "Nawigacja",
         "Moduły aplikacji",
@@ -1964,13 +1987,13 @@ def render_module_navigation():
     )
     selected_module = st.radio(
         "Aktywny moduł",
-        options=MODULE_OPTIONS,
-        index=0,
+        options=allowed_modules,
+        index=allowed_modules.index(st.session_state.get("active_module", allowed_modules[0])),
         key="active_module",
         label_visibility="collapsed",
         format_func=lambda value: MODULE_LABELS.get(value, value),
     )
-    return selected_module or "dashboard"
+    return selected_module or allowed_modules[0]
 
 
 def build_planner_scope_source(dataframe, selected_start_date, selected_end_date, selected_products, search_term):
@@ -2382,6 +2405,35 @@ def attempt_login(username, password):
 def logout_user():
     st.session_state["authenticated"] = False
     st.session_state["auth_user"] = None
+
+
+def get_auth_user():
+    return st.session_state.get("auth_user") or {}
+
+
+def get_user_role(auth_user=None):
+    auth_user = auth_user or get_auth_user()
+    role = str(auth_user.get("role", "Viewer")).strip()
+    return role if role in ROLE_MODULE_PERMISSIONS else "Viewer"
+
+
+def get_role_module_permissions(role=None, auth_user=None):
+    resolved_role = role or get_user_role(auth_user=auth_user)
+    return ROLE_MODULE_PERMISSIONS.get(resolved_role, ROLE_MODULE_PERMISSIONS["Viewer"])
+
+
+def get_allowed_modules(auth_user=None):
+    permissions = get_role_module_permissions(auth_user=auth_user)
+    return [module for module in MODULE_OPTIONS if module in permissions]
+
+
+def get_module_access_level(module_name, auth_user=None):
+    permissions = get_role_module_permissions(auth_user=auth_user)
+    return permissions.get(module_name, "none")
+
+
+def can_access_module(module_name, auth_user=None):
+    return get_module_access_level(module_name, auth_user=auth_user) != "none"
 
 
 def _legacy_render_sidebar_user():
@@ -2861,7 +2913,6 @@ def build_ui_helpers():
         render_alerts=render_alerts,
         render_chart_table_switch=render_chart_table_switch,
         render_kpi_cards=render_kpi_cards,
-        render_planner_tab=render_planner_tab,
         render_section_header=render_section_header,
         style_matrix=style_matrix,
         summarize_dates=summarize_dates,
@@ -2932,6 +2983,44 @@ def build_reference_snapshot(weekly_summary, selected_end_date):
     }
 
 
+def build_module_context(
+    filtered_df,
+    planner_source,
+    product_summary,
+    date_summary,
+    weekly_summary,
+    key_findings,
+    prev_meta,
+    curr_meta,
+    date_basis,
+    selected_start_date,
+    selected_end_date,
+    excel_bytes=None,
+    csv_bytes=None,
+):
+    auth_user = get_auth_user()
+    user_role = get_user_role(auth_user=auth_user)
+    return ModuleDataContext(
+        filtered_df=filtered_df,
+        planner_source=planner_source,
+        product_summary=product_summary,
+        date_summary=date_summary,
+        weekly_summary=weekly_summary,
+        key_findings=key_findings,
+        prev_meta=prev_meta,
+        curr_meta=curr_meta,
+        date_basis=date_basis,
+        selected_start_date=selected_start_date,
+        selected_end_date=selected_end_date,
+        auth_user=auth_user,
+        user_role=user_role,
+        module_access="none",
+        excel_bytes=excel_bytes,
+        csv_bytes=csv_bytes,
+        reference=build_reference_snapshot(weekly_summary, selected_end_date),
+    )
+
+
 def render_module_frame(
     active_module,
     filtered_df,
@@ -2948,6 +3037,13 @@ def render_module_frame(
     excel_bytes=None,
     csv_bytes=None,
 ):
+    auth_user = get_auth_user()
+    if not can_access_module(active_module, auth_user=auth_user):
+        allowed_modules = get_allowed_modules(auth_user=auth_user)
+        fallback_module = allowed_modules[0] if allowed_modules else "dashboard"
+        st.session_state["active_module"] = fallback_module
+        active_module = fallback_module
+
     brand_context = detect_brand_context(prev_meta, curr_meta)
     render_compact_header(
         brand_context,
@@ -2972,22 +3068,22 @@ def render_module_frame(
     render_report_metadata(report_metadata)
 
     ui = build_ui_helpers()
-    module_data = {
-        "filtered_df": filtered_df,
-        "planner_source": planner_source,
-        "product_summary": product_summary,
-        "date_summary": date_summary,
-        "weekly_summary": weekly_summary,
-        "key_findings": key_findings,
-        "prev_meta": prev_meta,
-        "curr_meta": curr_meta,
-        "date_basis": date_basis,
-        "selected_start_date": selected_start_date,
-        "selected_end_date": selected_end_date,
-        "excel_bytes": excel_bytes,
-        "csv_bytes": csv_bytes,
-        "reference": build_reference_snapshot(weekly_summary, selected_end_date),
-    }
+    module_data = build_module_context(
+        filtered_df,
+        planner_source,
+        product_summary,
+        date_summary,
+        weekly_summary,
+        key_findings,
+        prev_meta,
+        curr_meta,
+        date_basis,
+        selected_start_date,
+        selected_end_date,
+        excel_bytes=excel_bytes,
+        csv_bytes=csv_bytes,
+    )
+    module_data.module_access = get_module_access_level(active_module, auth_user=auth_user)
 
     module_renderers = {
         "dashboard": render_dashboard_module,
@@ -4699,7 +4795,7 @@ with app_sidebar:
         prev_meta=prev_meta,
         curr_meta=curr_meta,
     )
-    active_module = render_module_navigation()
+    active_module = render_module_navigation(auth_user=get_auth_user())
 
 date_basis = filter_state["date_basis"]
 selected_start_date = filter_state["selected_start_date"]
@@ -4877,7 +4973,7 @@ except Exception as exc:
 brand_context = detect_brand_context(prev_meta, curr_meta)
 with app_sidebar:
     filter_state = render_analysis_side_panel(result, brand_context)
-    active_module = render_module_navigation()
+    active_module = render_module_navigation(auth_user=get_auth_user())
 
 date_basis = filter_state["date_basis"]
 selected_start_date = filter_state["selected_start_date"]
