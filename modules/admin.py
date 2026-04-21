@@ -4,7 +4,7 @@ import streamlit as st
 def render(data, ui):
     ui.render_section_header(
         "Admin",
-        "Moduł administracyjny",
-        "To miejsce pozostaje gotowe pod przyszłe ustawienia, zarządzanie użytkownikami i konfigurację aplikacji.",
+        "Modul administracyjny",
+        "To miejsce pozostaje gotowe pod przyszle ustawienia, zarzadzanie uzytkownikami i konfiguracje aplikacji.",
     )
-    st.info("Moduł w przygotowaniu")
+    st.info("Modul w przygotowaniu")

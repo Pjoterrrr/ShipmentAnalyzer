@@ -2,29 +2,29 @@ import streamlit as st
 
 
 def render(data, ui):
-    filtered_df = data["filtered_df"]
-    product_summary = data["product_summary"]
-    date_summary = data["date_summary"]
-    weekly_summary = data["weekly_summary"]
-    key_findings = data["key_findings"]
-    date_basis = data["date_basis"]
-    reference = data["reference"]
+    filtered_df = data.filtered_df
+    product_summary = data.product_summary
+    date_summary = data.date_summary
+    weekly_summary = data.weekly_summary
+    key_findings = data.key_findings
+    date_basis = data.date_basis
+    reference = data.reference
 
     if filtered_df.empty:
-        st.info("Brak danych dla modułu Dashboard w aktywnych filtrach.")
+        st.info("Brak danych dla modulu Dashboard w aktywnych filtrach.")
         return
 
     ui.render_section_header(
         "KPI",
-        "Najważniejsze wskaźniki",
-        "Karty poniżej pokazują główne liczby do szybkiego odczytu bez przeskakiwania między modułami.",
+        "Najwazniejsze wskazniki",
+        "Karty ponizej pokazuja glowne liczby do szybkiego odczytu bez przeskakiwania miedzy modulami.",
     )
     ui.render_kpi_cards(ui.build_kpi_metrics(filtered_df, product_summary))
 
     ui.render_section_header(
         "Alerts & Insights",
         "Priorytety do sprawdzenia",
-        "Najważniejsze sygnały, które warto zweryfikować w pierwszej kolejności.",
+        "Najwazniejsze sygnaly, ktore warto zweryfikowac w pierwszej kolejnosci.",
     )
     ui.render_alerts(ui.build_alert_items(filtered_df, key_findings))
 
@@ -32,8 +32,8 @@ def render(data, ui):
         "Reference Week",
         "Szybki odczyt tygodniowy",
         (
-            f"Analiza tygodniowa odnosi się do {reference['reference_week_label']} "
-            f"({reference['reference_range_label']}). Data referencyjna: {data['selected_end_date']:%Y-%m-%d}."
+            f"Analiza tygodniowa odnosi sie do {reference['reference_week_label']} "
+            f"({reference['reference_range_label']}). Data referencyjna: {data.selected_end_date:%Y-%m-%d}."
         ),
     )
     ui.render_kpi_cards(
@@ -53,7 +53,7 @@ def render(data, ui):
             {
                 "label": "Zmiana WoW",
                 "value": reference["reference_wow_delta"],
-                "copy": f"{reference['reference_wow_pct']} względem {reference['previous_week_label']}",
+                "copy": f"{reference['reference_wow_pct']} wzgledem {reference['previous_week_label']}",
                 "tone": "neutral",
             },
             {
@@ -67,8 +67,8 @@ def render(data, ui):
 
     ui.render_section_header(
         "Dashboard",
-        f"Trend zmian według osi: {ui.get_date_label(date_basis)}",
-        "Widok główny zbiera najważniejsze wykresy, strukturę zmian oraz szybki podgląd produktów z największym ruchem.",
+        f"Trend zmian wedlug osi: {ui.get_date_label(date_basis)}",
+        "Widok glowny zbiera najwazniejsze wykresy, strukture zmian oraz szybki podglad produktow z najwiekszym ruchem.",
     )
     ui.render_chart_table_switch(
         "dashboard_trend",
@@ -101,7 +101,7 @@ def render(data, ui):
     with dashboard_left:
         st.subheader(increase_title)
         if increase_chart is None:
-            st.info("Brak produktów ze wzrostem w aktualnym filtrowaniu.")
+            st.info("Brak produktow ze wzrostem w aktualnym filtrowaniu.")
         else:
             ui.render_chart_table_switch(
                 "dashboard_increase",
@@ -113,7 +113,7 @@ def render(data, ui):
     with dashboard_right:
         st.subheader(decrease_title)
         if decrease_chart is None:
-            st.info("Brak produktów ze spadkiem w aktualnym filtrowaniu.")
+            st.info("Brak produktow ze spadkiem w aktualnym filtrowaniu.")
         else:
             ui.render_chart_table_switch(
                 "dashboard_decrease",
@@ -122,7 +122,7 @@ def render(data, ui):
                 table_height=340,
             )
 
-    st.subheader("Najważniejsze zmiany")
+    st.subheader("Najwazniejsze zmiany")
     highlight_table = (
         product_summary.assign(Abs_Delta=product_summary["Delta"].abs())
         .sort_values("Abs_Delta", ascending=False)
@@ -138,12 +138,12 @@ def render(data, ui):
     highlight_table["Delta"] = highlight_table["Delta"].map(ui.format_signed_int)
     highlight_table = highlight_table.rename(
         columns={
-            "Part Number": "Numer części",
+            "Part Number": "Numer czesci",
             "Part Description": "Opis produktu",
-            "Quantity_Prev": "Poprzednia ilość",
-            "Quantity_Curr": "Aktualna ilość",
-            "Delta": "Zmiana ilości",
-            "Alert_Count": "Liczba alertów",
+            "Quantity_Prev": "Poprzednia ilosc",
+            "Quantity_Curr": "Aktualna ilosc",
+            "Delta": "Zmiana ilosci",
+            "Alert_Count": "Liczba alertow",
             "Change Direction": "Kierunek zmiany",
         }
     )
