@@ -18,6 +18,18 @@ from analytics_calendar import (
 from openpyxl.drawing.image import Image as OpenpyxlImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from planner_helpers import (
+    build_planner_coverage_chart,
+    build_planner_daily_display,
+    build_planner_display_table,
+    build_planner_excel_bytes,
+    build_planner_input_frame,
+    build_planner_kpis,
+    build_planner_priority_chart,
+    calculate_planner_outputs,
+    planner_inputs_to_state,
+    prepare_planner_source,
+)
 from release_loader import compare_releases as compare_release_frames
 from release_loader import load_release as load_release_file
 
@@ -1930,6 +1942,157 @@ def render_export_actions(csv_bytes, excel_bytes):
     )
 
 
+def build_planner_scope_source(dataframe, selected_start_date, selected_end_date, selected_products, search_term):
+    planner_df = dataframe.copy()
+    planner_df["Ship Date"] = pd.to_datetime(planner_df["Ship Date"], errors="coerce")
+    planner_df = planner_df[
+        planner_df["Ship Date"].dt.date.between(selected_start_date, selected_end_date)
+    ]
+
+    if selected_products:
+        planner_df = planner_df[planner_df["Product Label"].isin(selected_products)]
+    else:
+        planner_df = planner_df.iloc[0:0]
+
+    if search_term.strip():
+        query = search_term.strip().lower()
+        planner_df = planner_df[
+            planner_df["Part Number"].str.lower().str.contains(query, na=False)
+            | planner_df["Part Description"].str.lower().str.contains(query, na=False)
+        ]
+
+    return prepare_planner_source(planner_df)
+
+
+def get_planner_storage_key(curr_meta):
+    file_name = str(curr_meta.get("file_name", "planner")).strip().lower()
+    return f"planner_inputs::{file_name}"
+
+
+def render_planner_tab(planner_source, curr_meta):
+    render_section_header(
+        "Planner",
+        "Planowanie produkcji względem Ship Date",
+        "Part Number i Part Description są pobierane automatycznie z release'u. Operator wpisuje tylko Stock oraz opcjonalny Safety Stock.",
+    )
+
+    if planner_source.empty:
+        st.info(
+            "Brak dodatniego demandu w aktualnym zakresie Ship Date. Poszerz zakres dat albo wybór produktów, aby uruchomić Planner."
+        )
+        return
+
+    storage_key = get_planner_storage_key(curr_meta)
+    stored_inputs = st.session_state.get(storage_key, {})
+    planner_input_df = build_planner_input_frame(planner_source, stored_inputs)
+    editor_key = f"{storage_key}::editor"
+
+    st.caption(
+        "Planner liczy wyłącznie na podstawie Ship Date oraz Quantity_Curr. Filtry zakresu dat, produktów i wyszukiwarka pozostają aktywne."
+    )
+    edited_inputs = st.data_editor(
+        planner_input_df,
+        key=editor_key,
+        hide_index=True,
+        use_container_width=True,
+        num_rows="fixed",
+        disabled=["Part Number", "Part Description"],
+        column_config={
+            "Part Number": st.column_config.TextColumn("Part Number", width="medium"),
+            "Part Description": st.column_config.TextColumn("Part Description", width="large"),
+            "Stock": st.column_config.NumberColumn("Stock", min_value=0.0, step=1.0, format="%.0f"),
+            "Safety Stock": st.column_config.NumberColumn("Safety Stock", min_value=0.0, step=1.0, format="%.0f"),
+        },
+    )
+    edited_inputs["Stock"] = pd.to_numeric(edited_inputs["Stock"], errors="coerce").fillna(0.0)
+    edited_inputs["Safety Stock"] = pd.to_numeric(edited_inputs["Safety Stock"], errors="coerce").fillna(0.0)
+    st.session_state[storage_key] = planner_inputs_to_state(edited_inputs)
+
+    planner_results, planner_daily = calculate_planner_outputs(planner_source, edited_inputs)
+    planner_results_table = build_planner_display_table(planner_results)
+
+    planner_kpis = build_planner_kpis(planner_results)
+    planner_priority_chart = build_planner_priority_chart(planner_results)
+    planner_coverage_chart = build_planner_coverage_chart(planner_results)
+    render_kpi_cards(
+        [
+            {
+                "label": "Produkty w plannerze",
+                "value": f"{planner_kpis['products']:,}",
+                "copy": "Materiały z dodatnim demandem w aktualnym zakresie Ship Date.",
+                "tone": "neutral",
+            },
+            {
+                "label": "Pozycje krytyczne",
+                "value": f"{planner_kpis['critical']:,}",
+                "copy": "Status Krytyczne lub Wysokie ryzyko.",
+                "tone": "negative",
+            },
+            {
+                "label": "Qty To Produce Now",
+                "value": f"{planner_kpis['to_produce']:,.0f}",
+                "copy": "Łączna ilość brakująca do zabezpieczenia popytu i safety stock.",
+                "tone": "positive" if planner_kpis["to_produce"] <= 0 else "negative",
+            },
+            {
+                "label": "Średni Coverage %",
+                "value": f"{planner_kpis['avg_coverage']:.1f}%",
+                "copy": f"Pokryte produkty: {planner_kpis['covered_share']:.1f}%",
+                "tone": "neutral",
+            },
+        ]
+    )
+
+    planner_chart_left, planner_chart_right = st.columns(2, gap="large")
+    with planner_chart_left:
+        render_chart_table_switch(
+            "planner_priority",
+            apply_chart_theme(planner_priority_chart) if planner_priority_chart is not None else None,
+            planner_results_table,
+            chart_empty_message="Brak danych do rankingu Planner.",
+            table_height=360,
+        )
+    with planner_chart_right:
+        render_chart_table_switch(
+            "planner_coverage",
+            apply_chart_theme(planner_coverage_chart) if planner_coverage_chart is not None else None,
+            planner_results_table,
+            chart_empty_message="Brak danych do wykresu coverage.",
+            table_height=360,
+        )
+
+    st.subheader("Wyniki Planner")
+    st.dataframe(planner_results_table, use_container_width=True, height=420)
+
+    selected_planner_part = st.selectbox(
+        "Szczegół produktu dzień po dniu",
+        options=planner_results["Part Number"].tolist(),
+        format_func=lambda value: (
+            f"{value} | {planner_results.loc[planner_results['Part Number'] == value, 'Part Description'].iloc[0]}"
+        ),
+    )
+    planner_daily_detail = build_planner_daily_display(planner_daily, selected_planner_part)
+    st.dataframe(planner_daily_detail, use_container_width=True, height=360)
+
+    planner_csv_bytes = planner_results_table.to_csv(index=False).encode("utf-8")
+    planner_excel_bytes = build_planner_excel_bytes(edited_inputs, planner_results, planner_daily)
+    download_left, download_right = st.columns(2)
+    with download_left:
+        st.download_button(
+            "Pobierz Planner CSV",
+            data=planner_csv_bytes,
+            file_name="planner_summary.csv",
+            mime="text/csv",
+        )
+    with download_right:
+        st.download_button(
+            "Pobierz Planner Excel",
+            data=planner_excel_bytes,
+            file_name="planner_summary.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+
 def render_welcome_state(prev_file, current_file):
     brand_context = detect_brand_context(
         *(meta for meta in [
@@ -2550,6 +2713,7 @@ def render_analysis_side_panel(result, brand_context, prev_meta=None, curr_meta=
 
 def render_analysis_main(
     filtered_df,
+    planner_source,
     product_summary,
     date_summary,
     weekly_summary,
@@ -2622,65 +2786,71 @@ def render_analysis_main(
     ]
     render_report_metadata(report_metadata)
 
-    if filtered_df.empty:
+    analytics_empty = filtered_df.empty
+    if analytics_empty and planner_source.empty:
         st.warning(
             "Po zastosowaniu filtrów nie ma danych do pokazania. Poszerz zakres dat albo przywróć produkty w panelu po lewej stronie."
         )
         return
 
-    render_section_header(
-        "KPI",
-        "Najważniejsze wskaźniki",
-        "Karty poniżej pokazują główne liczby do szybkiego odczytu bez przeskakiwania między zakładkami.",
-    )
-    render_kpi_cards(build_kpi_metrics(filtered_df, product_summary))
+    if analytics_empty:
+        st.warning(
+            "Główne zakładki analityczne są puste dla bieżących filtrów, ale Planner nadal liczy aktualny demand według Ship Date i Quantity_Curr."
+        )
+    else:
+        render_section_header(
+            "KPI",
+            "Najważniejsze wskaźniki",
+            "Karty poniżej pokazują główne liczby do szybkiego odczytu bez przeskakiwania między zakładkami.",
+        )
+        render_kpi_cards(build_kpi_metrics(filtered_df, product_summary))
 
-    render_section_header(
-        "Alerts & Insights",
-        "Priorytety do sprawdzenia",
-        "Najważniejsze sygnały, które warto zweryfikować w pierwszej kolejności.",
-    )
-    render_alerts(build_alert_items(filtered_df, key_findings))
+        render_section_header(
+            "Alerts & Insights",
+            "Priorytety do sprawdzenia",
+            "Najważniejsze sygnały, które warto zweryfikować w pierwszej kolejności.",
+        )
+        render_alerts(build_alert_items(filtered_df, key_findings))
 
-    render_section_header(
-        "Reference Week",
-        "Szybki odczyt tygodniowy",
-        (
-            f"Analiza tygodniowa odnosi się do {reference_week_label} ({reference_range_label}). "
-            f"Data referencyjna: {selected_end_date:%Y-%m-%d}."
-        ),
-    )
-    render_kpi_cards(
-        [
-            {
-                "label": "Wolumen tygodnia",
-                "value": f"{float(reference_row['Quantity_Curr']):,.0f}" if reference_row is not None else "0",
-                "copy": f"Bilans release: {reference_release_delta}",
-                "tone": "neutral",
-            },
-            {
-                "label": "Zmiana vs poprzedni release",
-                "value": reference_release_pct,
-                "copy": f"Poprzedni wolumen: {float(reference_row['Quantity_Prev']):,.0f}" if reference_row is not None else "Poprzedni wolumen: 0",
-                "tone": "neutral",
-            },
-            {
-                "label": "Zmiana WoW",
-                "value": reference_wow_delta,
-                "copy": f"{reference_wow_pct} względem {previous_week_label}",
-                "tone": "neutral",
-            },
-            {
-                "label": "Dni robocze PL",
-                "value": f"{reference_working_days}",
-                "copy": reference_per_day,
-                "tone": "neutral",
-            },
-        ]
-    )
+        render_section_header(
+            "Reference Week",
+            "Szybki odczyt tygodniowy",
+            (
+                f"Analiza tygodniowa odnosi się do {reference_week_label} ({reference_range_label}). "
+                f"Data referencyjna: {selected_end_date:%Y-%m-%d}."
+            ),
+        )
+        render_kpi_cards(
+            [
+                {
+                    "label": "Wolumen tygodnia",
+                    "value": f"{float(reference_row['Quantity_Curr']):,.0f}" if reference_row is not None else "0",
+                    "copy": f"Bilans release: {reference_release_delta}",
+                    "tone": "neutral",
+                },
+                {
+                    "label": "Zmiana vs poprzedni release",
+                    "value": reference_release_pct,
+                    "copy": f"Poprzedni wolumen: {float(reference_row['Quantity_Prev']):,.0f}" if reference_row is not None else "Poprzedni wolumen: 0",
+                    "tone": "neutral",
+                },
+                {
+                    "label": "Zmiana WoW",
+                    "value": reference_wow_delta,
+                    "copy": f"{reference_wow_pct} względem {previous_week_label}",
+                    "tone": "neutral",
+                },
+                {
+                    "label": "Dni robocze PL",
+                    "value": f"{reference_working_days}",
+                    "copy": reference_per_day,
+                    "tone": "neutral",
+                },
+            ]
+        )
 
-    dashboard_tab, weekly_tab, product_tab, matrix_tab, detail_tab = st.tabs(
-        ["Dashboard", "Analiza tygodniowa", "Raport produktu", "Macierz release'u", "Dane szczegolowe"]
+    dashboard_tab, weekly_tab, product_tab, planner_tab, matrix_tab, detail_tab = st.tabs(
+        ["Dashboard", "Analiza tygodniowa", "Raport produktu", "Planner", "Macierz release'u", "Dane szczegółowe"]
     )
 
     with dashboard_tab:
@@ -2878,96 +3048,102 @@ def render_analysis_main(
         st.dataframe(weekly_table, use_container_width=True, height=420)
 
     with product_tab:
-        render_section_header(
-            "Product Drilldown",
-            "Analiza wybranego produktu",
-            "Skup się na jednym materiale i prześledź jego ruch po dniach oraz tygodniach bez utraty kontekstu filtrowania.",
-        )
-        selected_product_label = st.selectbox(
-            "Wybierz produkt",
-            options=product_summary["Product Label"].tolist(),
-        )
-        product_detail = filtered_df[
-            filtered_df["Product Label"] == selected_product_label
-        ].sort_values(date_basis)
-        product_date_summary = summarize_dates(product_detail, date_basis)
+        if product_summary.empty:
+            st.info("Brak danych produktowych dla aktywnych filtrów.")
+        else:
+            render_section_header(
+                "Product Drilldown",
+                "Analiza wybranego produktu",
+                "Skup się na jednym materiale i prześledź jego ruch po dniach oraz tygodniach bez utraty kontekstu filtrowania.",
+            )
+            selected_product_label = st.selectbox(
+                "Wybierz produkt",
+                options=product_summary["Product Label"].tolist(),
+            )
+            product_detail = filtered_df[
+                filtered_df["Product Label"] == selected_product_label
+            ].sort_values(date_basis)
+            product_date_summary = summarize_dates(product_detail, date_basis)
 
-        product_metrics = st.columns(4)
-        product_metrics[0].metric(
-            "Poprzednia ilosc", f"{product_detail['Quantity_Prev'].sum():,.0f}"
-        )
-        product_metrics[1].metric(
-            "Aktualna ilosc", f"{product_detail['Quantity_Curr'].sum():,.0f}"
-        )
-        product_metrics[2].metric(
-            "Bilans zmian", f"{product_detail['Delta'].sum():+,.0f}"
-        )
-        product_metrics[3].metric("Liczba alertow", int(product_detail["Alert"].sum()))
+            product_metrics = st.columns(4)
+            product_metrics[0].metric(
+                "Poprzednia ilosc", f"{product_detail['Quantity_Prev'].sum():,.0f}"
+            )
+            product_metrics[1].metric(
+                "Aktualna ilosc", f"{product_detail['Quantity_Curr'].sum():,.0f}"
+            )
+            product_metrics[2].metric(
+                "Bilans zmian", f"{product_detail['Delta'].sum():+,.0f}"
+            )
+            product_metrics[3].metric("Liczba alertow", int(product_detail["Alert"].sum()))
 
-        render_chart_table_switch(
-            "product_quantity",
-            build_quantity_chart(product_date_summary, get_date_label(date_basis)),
-            product_date_summary,
-            table_height=320,
-        )
-        render_chart_table_switch(
-            "product_delta",
-            build_delta_chart(product_date_summary, get_date_label(date_basis)),
-            product_date_summary,
-            table_height=320,
-        )
+            render_chart_table_switch(
+                "product_quantity",
+                build_quantity_chart(product_date_summary, get_date_label(date_basis)),
+                product_date_summary,
+                table_height=320,
+            )
+            render_chart_table_switch(
+                "product_delta",
+                build_delta_chart(product_date_summary, get_date_label(date_basis)),
+                product_date_summary,
+                table_height=320,
+            )
 
-        product_weekly_summary = build_weekly_summary(
-            product_detail,
-            date_basis,
-            selected_start_date,
-            selected_end_date,
-            selected_end_date,
-            THRESHOLD,
-        )
-        st.subheader("Tygodnie ISO dla produktu")
-        product_weekly_chart = build_weekly_quantity_chart(product_weekly_summary)
-        render_chart_table_switch(
-            "product_weekly",
-            product_weekly_chart,
-            prepare_weekly_display_table(product_weekly_summary),
-            chart_empty_message="Brak danych tygodniowych dla wybranego produktu.",
-            table_height=280,
-        )
+            product_weekly_summary = build_weekly_summary(
+                product_detail,
+                date_basis,
+                selected_start_date,
+                selected_end_date,
+                selected_end_date,
+                THRESHOLD,
+            )
+            st.subheader("Tygodnie ISO dla produktu")
+            product_weekly_chart = build_weekly_quantity_chart(product_weekly_summary)
+            render_chart_table_switch(
+                "product_weekly",
+                product_weekly_chart,
+                prepare_weekly_display_table(product_weekly_summary),
+                chart_empty_message="Brak danych tygodniowych dla wybranego produktu.",
+                table_height=280,
+            )
 
-        product_table = product_detail[available_detail_columns(product_detail)].copy()
-        product_table["Ship Date"] = product_table["Ship Date"].dt.strftime("%Y-%m-%d")
-        product_table["Receipt Date"] = product_table["Receipt Date"].dt.strftime("%Y-%m-%d")
-        product_table["Change Direction"] = product_table["Change Direction"].map(
-            get_change_label
-        )
-        product_table["Alert"] = product_table["Alert"].map(
-            lambda value: "Tak" if value else "Nie"
-        )
-        product_table = product_table.rename(
-            columns={
-                "Part Number": "Numer czesci",
-                "Part Description": "Opis produktu",
-                "Origin Doc": "Origin Doc",
-                "Item": "Pozycja",
-                "Ship To": "Ship-to",
-                "Customer Material": "Material klienta",
-                "Unrestricted Qty": "Ilosc unrestr.",
-                "Unloading Point": "Punkt rozladunku",
-                "Ship Date": "Data wysylki",
-                "Receipt Date": "Data odbioru",
-                "Unit of Measure": "JM",
-                "CumQty": "CumQty",
-                "Quantity_Prev": "Poprzednia ilosc",
-                "Quantity_Curr": "Aktualna ilosc",
-                "Delta": "Zmiana ilosci",
-                "Percent Change": "Zmiana %",
-                "Demand Status": "Status popytu",
-                "Change Direction": "Kierunek zmiany",
-                "Alert": "Alert",
-            }
-        )
-        st.dataframe(product_table, use_container_width=True, height=360)
+            product_table = product_detail[available_detail_columns(product_detail)].copy()
+            product_table["Ship Date"] = product_table["Ship Date"].dt.strftime("%Y-%m-%d")
+            product_table["Receipt Date"] = product_table["Receipt Date"].dt.strftime("%Y-%m-%d")
+            product_table["Change Direction"] = product_table["Change Direction"].map(
+                get_change_label
+            )
+            product_table["Alert"] = product_table["Alert"].map(
+                lambda value: "Tak" if value else "Nie"
+            )
+            product_table = product_table.rename(
+                columns={
+                    "Part Number": "Numer czesci",
+                    "Part Description": "Opis produktu",
+                    "Origin Doc": "Origin Doc",
+                    "Item": "Pozycja",
+                    "Ship To": "Ship-to",
+                    "Customer Material": "Material klienta",
+                    "Unrestricted Qty": "Ilosc unrestr.",
+                    "Unloading Point": "Punkt rozladunku",
+                    "Ship Date": "Data wysylki",
+                    "Receipt Date": "Data odbioru",
+                    "Unit of Measure": "JM",
+                    "CumQty": "CumQty",
+                    "Quantity_Prev": "Poprzednia ilosc",
+                    "Quantity_Curr": "Aktualna ilosc",
+                    "Delta": "Zmiana ilosci",
+                    "Percent Change": "Zmiana %",
+                    "Demand Status": "Status popytu",
+                    "Change Direction": "Kierunek zmiany",
+                    "Alert": "Alert",
+                }
+            )
+            st.dataframe(product_table, use_container_width=True, height=360)
+
+    with planner_tab:
+        render_planner_tab(planner_source, curr_meta)
 
     with matrix_tab:
         render_section_header(
@@ -4262,6 +4438,14 @@ if search_term.strip():
         | filtered_df["Part Description"].str.lower().str.contains(query, na=False)
     ]
 
+planner_source = build_planner_scope_source(
+    result,
+    selected_start_date,
+    selected_end_date,
+    selected_products,
+    search_term,
+)
+
 filtered_df = filtered_df[
     filtered_df["Change Direction"].isin(selected_change_directions)
 ]
@@ -4307,6 +4491,7 @@ with app_sidebar:
 with app_main:
     render_analysis_main(
         filtered_df,
+        planner_source,
         product_summary,
         date_summary,
         weekly_summary,
@@ -4429,6 +4614,14 @@ if search_term.strip():
         | filtered_df["Part Description"].str.lower().str.contains(query, na=False)
     ]
 
+planner_source = build_planner_scope_source(
+    result,
+    selected_start_date,
+    selected_end_date,
+    selected_products,
+    search_term,
+)
+
 filtered_df = filtered_df[
     filtered_df["Change Direction"].isin(selected_change_directions)
 ]
@@ -4453,6 +4646,7 @@ key_findings = build_key_findings(
 with app_main:
     render_analysis_main(
         filtered_df,
+        planner_source,
         product_summary,
         date_summary,
         weekly_summary,
