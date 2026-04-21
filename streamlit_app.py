@@ -70,6 +70,7 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&display=swap');
     :root {
         --ink: #f5f7fb;
         --navy: #e8eef9;
@@ -399,6 +400,28 @@ st.markdown(
         letter-spacing: 0.08em;
         text-transform: uppercase;
         margin-bottom: 0.85rem;
+    }
+    .brand-wordmark {
+        display: inline-block;
+        margin-bottom: 1rem;
+        color: #f8fbff;
+        font-family: "Space Grotesk", "Segoe UI", "Aptos", "Helvetica Neue", Arial, sans-serif;
+        font-size: clamp(2rem, 1.35rem + 1.8vw, 3.4rem);
+        font-weight: 700;
+        line-height: 0.95;
+        letter-spacing: -0.05em;
+        text-wrap: balance;
+    }
+    .brand-wordmark--soft {
+        color: rgba(248, 251, 255, 0.96);
+        text-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+    }
+    .app-shell-header .brand-wordmark {
+        margin-bottom: 0.35rem;
+        font-size: clamp(1.85rem, 1.25rem + 1.45vw, 3rem);
+    }
+    .login-brand-card .brand-wordmark {
+        max-width: 12ch;
     }
     .upload-card {
         border: 1px solid var(--line);
@@ -1322,10 +1345,10 @@ st.markdown(
     <div class="app-shell-header">
         <div>
             <div class="app-shell-kicker">Release Intelligence</div>
-            <div class="app-shell-title">Dashboard porownan release'ow</div>
+            <div class="brand-wordmark brand-wordmark--soft">Pjoter Development</div>
             <div class="app-shell-copy">
-                Upload, filtry i eksport pozostaja w jednym miejscu do codziennej analizy planistycznej
-                i logistycznej.
+                Dashboard porownan release'ow. Upload, filtry i eksport pozostaja w jednym miejscu
+                do codziennej analizy planistycznej i logistycznej.
             </div>
         </div>
         <div class="app-shell-chip">Workspace</div>
@@ -2154,11 +2177,7 @@ def render_login_screen():
     st.markdown('<div class="login-shell">', unsafe_allow_html=True)
     left_col, right_col = st.columns([1.18, 0.92], gap="large")
     with left_col:
-        logo_html = (
-            f'<img class="hero-logo" src="{logo_data_uri()}" alt="{BRAND_NAME} logo" />'
-            if logo_available()
-            else f'<div class="brand-badge">{BRAND_NAME}</div>'
-        )
+        logo_html = '<div class="brand-wordmark brand-wordmark--soft">Pjoter Development</div>'
         st.markdown(
             f"""
             <div class="login-brand-card">
