@@ -2652,17 +2652,14 @@ def render_analysis_main(
     )
 
     report_metadata = [
-        {"label": "Klient", "value": brand_context.get("label", "n/a")},
         {"label": "Format", "value": describe_format_context(prev_meta, curr_meta)},
         {"label": "Numer PO", "value": curr_meta.get("po_number", "n/a")},
         {"label": "Planista", "value": curr_meta.get("planner_name", "n/a")},
         {"label": "E-mail", "value": curr_meta.get("planner_email", "n/a")},
-        {"label": "Oś analizy", "value": get_date_label(date_basis)},
         {
             "label": "Zakres analizy",
             "value": f"{selected_start_date:%Y-%m-%d} — {selected_end_date:%Y-%m-%d}",
         },
-        {"label": "Referencyjny tydzień", "value": reference_week_label},
         {"label": "Poprzedni release", "value": format_release_summary(prev_meta)},
         {"label": "Aktualny release", "value": format_release_summary(curr_meta)},
     ]
