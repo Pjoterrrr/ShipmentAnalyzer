@@ -6,6 +6,7 @@ import io
 import json
 from pathlib import Path
 import sys
+from types import SimpleNamespace
 import altair as alt
 import pandas as pd
 import streamlit as st
@@ -18,6 +19,11 @@ from analytics_calendar import (
 from openpyxl.drawing.image import Image as OpenpyxlImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from modules.admin import render as render_admin_module
+from modules.dashboard import render as render_dashboard_module
+from modules.details import render as render_details_module
+from modules.planner import render as render_planner_module
+from modules.reports import render as render_reports_module
 from planner_helpers import (
     build_planner_coverage_chart,
     build_planner_daily_display,
@@ -71,6 +77,14 @@ MATRIX_METRIC_LABELS = {
 VIEW_MODE_LABELS = {
     "chart": "Wykres",
     "table": "Dane",
+}
+MODULE_OPTIONS = ["dashboard", "planner", "reports", "details", "admin"]
+MODULE_LABELS = {
+    "dashboard": "Dashboard",
+    "planner": "Planner",
+    "reports": "Reports",
+    "details": "Details",
+    "admin": "Admin",
 }
 
 
@@ -1942,6 +1956,23 @@ def render_export_actions(csv_bytes, excel_bytes):
     )
 
 
+def render_module_navigation():
+    render_section_header(
+        "Nawigacja",
+        "Moduły aplikacji",
+        "Wybierz aktywny moduł. Upload, filtry i stan sesji pozostają wspólne dla całej aplikacji.",
+    )
+    selected_module = st.radio(
+        "Aktywny moduł",
+        options=MODULE_OPTIONS,
+        index=0,
+        key="active_module",
+        label_visibility="collapsed",
+        format_func=lambda value: MODULE_LABELS.get(value, value),
+    )
+    return selected_module or "dashboard"
+
+
 def build_planner_scope_source(dataframe, selected_start_date, selected_end_date, selected_products, search_term):
     planner_df = dataframe.copy()
     planner_df["Ship Date"] = pd.to_datetime(planner_df["Ship Date"], errors="coerce")
@@ -2091,6 +2122,97 @@ def render_planner_tab(planner_source, curr_meta):
             file_name="planner_summary.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
+
+
+def build_weekly_focus_table(
+    weekly_summary,
+    reference_week_label,
+    previous_week_label,
+    reference_release_delta,
+    reference_release_pct,
+    reference_wow_delta,
+    reference_wow_pct,
+):
+    reference_row, previous_week_row = get_reference_week_rows(weekly_summary)
+    return pd.DataFrame(
+        [
+            {
+                "Widok": "Referencyjny tydzień",
+                "Tydzień ISO": reference_week_label,
+                "Aktualny release": (
+                    f"{float(reference_row['Quantity_Curr']):,.0f}" if reference_row is not None else "0"
+                ),
+                "Poprzedni release": (
+                    f"{float(reference_row['Quantity_Prev']):,.0f}" if reference_row is not None else "0"
+                ),
+                "Delta release": reference_release_delta,
+                "Zmiana release %": reference_release_pct,
+                "Delta WoW": reference_wow_delta,
+                "Zmiana WoW %": reference_wow_pct,
+            },
+            {
+                "Widok": "Poprzedni tydzień",
+                "Tydzień ISO": previous_week_label,
+                "Aktualny release": (
+                    f"{float(previous_week_row['Quantity_Curr']):,.0f}" if previous_week_row is not None else "0"
+                ),
+                "Poprzedni release": (
+                    f"{float(previous_week_row['Quantity_Prev']):,.0f}" if previous_week_row is not None else "0"
+                ),
+                "Delta release": (
+                    format_signed_int(previous_week_row["Delta"]) if previous_week_row is not None else "+0"
+                ),
+                "Zmiana release %": (
+                    format_percent_display(previous_week_row["Release Percent Label"])
+                    if previous_week_row is not None
+                    else "n/a"
+                ),
+                "Delta WoW": (
+                    format_signed_int(previous_week_row["WoW Delta"]) if previous_week_row is not None else "+0"
+                ),
+                "Zmiana WoW %": (
+                    format_percent_display(previous_week_row["WoW Percent Label"])
+                    if previous_week_row is not None
+                    else "n/a"
+                ),
+            },
+        ]
+    )
+
+
+def build_product_detail_table(product_detail):
+    product_table = product_detail[available_detail_columns(product_detail)].copy()
+    product_table["Ship Date"] = product_table["Ship Date"].dt.strftime("%Y-%m-%d")
+    product_table["Receipt Date"] = product_table["Receipt Date"].dt.strftime("%Y-%m-%d")
+    product_table["Change Direction"] = product_table["Change Direction"].map(
+        get_change_label
+    )
+    product_table["Alert"] = product_table["Alert"].map(
+        lambda value: "Tak" if value else "Nie"
+    )
+    return product_table.rename(
+        columns={
+            "Part Number": "Numer czesci",
+            "Part Description": "Opis produktu",
+            "Origin Doc": "Origin Doc",
+            "Item": "Pozycja",
+            "Ship To": "Ship-to",
+            "Customer Material": "Material klienta",
+            "Unrestricted Qty": "Ilosc unrestr.",
+            "Unloading Point": "Punkt rozladunku",
+            "Ship Date": "Data wysylki",
+            "Receipt Date": "Data odbioru",
+            "Unit of Measure": "JM",
+            "CumQty": "CumQty",
+            "Quantity_Prev": "Poprzednia ilosc",
+            "Quantity_Curr": "Aktualna ilosc",
+            "Delta": "Zmiana ilosci",
+            "Percent Change": "Zmiana %",
+            "Demand Status": "Status popytu",
+            "Change Direction": "Kierunek zmiany",
+            "Alert": "Alert",
+        }
+    )
 
 
 def render_welcome_state(prev_file, current_file):
@@ -2709,6 +2831,173 @@ def render_analysis_side_panel(result, brand_context, prev_meta=None, curr_meta=
     st.caption(brand_context.get("format_copy", ""))
     render_file_slot_cards(prev_meta=prev_meta, curr_meta=curr_meta)
     return render_filter_controls(result)
+
+
+def build_ui_helpers():
+    return SimpleNamespace(
+        apply_chart_theme=apply_chart_theme,
+        available_detail_columns=available_detail_columns,
+        build_alert_items=build_alert_items,
+        build_change_mix_chart=build_change_mix_chart,
+        build_change_mix_source=build_change_mix_source,
+        build_delta_chart=build_delta_chart,
+        build_detail_export_table=build_detail_export_table,
+        build_kpi_metrics=build_kpi_metrics,
+        build_matrix=build_matrix,
+        build_product_bar_chart=build_product_bar_chart,
+        build_product_bar_source=build_product_bar_source,
+        build_product_detail_table=build_product_detail_table,
+        build_quantity_chart=build_quantity_chart,
+        build_weekly_delta_chart=build_weekly_delta_chart,
+        build_weekly_focus_table=build_weekly_focus_table,
+        build_weekly_quantity_chart=build_weekly_quantity_chart,
+        build_weekly_summary=build_weekly_summary,
+        format_signed_int=format_signed_int,
+        get_change_label=get_change_label,
+        get_date_label=get_date_label,
+        get_metric_label=get_metric_label,
+        max_matrix_style_cells=MAX_MATRIX_STYLE_CELLS,
+        prepare_weekly_display_table=prepare_weekly_display_table,
+        render_alerts=render_alerts,
+        render_chart_table_switch=render_chart_table_switch,
+        render_kpi_cards=render_kpi_cards,
+        render_planner_tab=render_planner_tab,
+        render_section_header=render_section_header,
+        style_matrix=style_matrix,
+        summarize_dates=summarize_dates,
+        threshold=THRESHOLD,
+        to_excel_bytes=to_excel_bytes,
+    )
+
+
+def build_reference_snapshot(weekly_summary, selected_end_date):
+    reference_week = get_last_completed_reference_week(selected_end_date)
+    reference_row, previous_week_row = get_reference_week_rows(weekly_summary)
+    return {
+        "reference_week_label": (
+            reference_row["Week Label"]
+            if reference_row is not None
+            else reference_week.week_label
+        ),
+        "reference_range_label": (
+            format_week_range(reference_row["Week Start"], reference_row["Week End"])
+            if reference_row is not None
+            else format_week_range(reference_week.week_start, reference_week.week_end)
+        ),
+        "reference_release_delta": (
+            format_signed_int(reference_row["Delta"])
+            if reference_row is not None
+            else "+0"
+        ),
+        "reference_release_pct": (
+            format_percent_display(reference_row["Release Percent Label"])
+            if reference_row is not None
+            else "n/a"
+        ),
+        "reference_wow_delta": (
+            format_signed_int(reference_row["WoW Delta"])
+            if reference_row is not None
+            else "+0"
+        ),
+        "reference_wow_pct": (
+            format_percent_display(reference_row["WoW Percent Label"])
+            if reference_row is not None
+            else "n/a"
+        ),
+        "reference_working_days": (
+            int(reference_row["Working_Days_PL"])
+            if reference_row is not None
+            else 0
+        ),
+        "reference_per_day": (
+            "n/a"
+            if reference_row is None or pd.isna(reference_row["Avg Current / Working Day"])
+            else f"{float(reference_row['Avg Current / Working Day']):,.2f} / dzien"
+        ),
+        "previous_week_label": (
+            previous_week_row["Week Label"]
+            if previous_week_row is not None
+            else "brak"
+        ),
+        "reference_curr_qty": (
+            f"{float(reference_row['Quantity_Curr']):,.0f}"
+            if reference_row is not None
+            else "0"
+        ),
+        "reference_prev_qty": (
+            f"{float(reference_row['Quantity_Prev']):,.0f}"
+            if reference_row is not None
+            else "0"
+        ),
+    }
+
+
+def render_module_frame(
+    active_module,
+    filtered_df,
+    planner_source,
+    product_summary,
+    date_summary,
+    weekly_summary,
+    key_findings,
+    prev_meta,
+    curr_meta,
+    date_basis,
+    selected_start_date,
+    selected_end_date,
+    excel_bytes=None,
+    csv_bytes=None,
+):
+    brand_context = detect_brand_context(prev_meta, curr_meta)
+    render_compact_header(
+        brand_context,
+        prev_meta,
+        curr_meta,
+        date_basis,
+        selected_start_date,
+        selected_end_date,
+    )
+
+    report_metadata = [
+        {"label": "Format", "value": describe_format_context(prev_meta, curr_meta)},
+        {"label": "Numer PO", "value": curr_meta.get("po_number", "n/a")},
+        {"label": "Planista", "value": curr_meta.get("planner_name", "n/a")},
+        {"label": "E-mail", "value": curr_meta.get("planner_email", "n/a")},
+        {
+            "label": "Zakres analizy",
+            "value": f"{selected_start_date:%Y-%m-%d} - {selected_end_date:%Y-%m-%d}",
+        },
+        {"label": "Modul", "value": MODULE_LABELS.get(active_module, "Dashboard")},
+    ]
+    render_report_metadata(report_metadata)
+
+    ui = build_ui_helpers()
+    module_data = {
+        "filtered_df": filtered_df,
+        "planner_source": planner_source,
+        "product_summary": product_summary,
+        "date_summary": date_summary,
+        "weekly_summary": weekly_summary,
+        "key_findings": key_findings,
+        "prev_meta": prev_meta,
+        "curr_meta": curr_meta,
+        "date_basis": date_basis,
+        "selected_start_date": selected_start_date,
+        "selected_end_date": selected_end_date,
+        "excel_bytes": excel_bytes,
+        "csv_bytes": csv_bytes,
+        "reference": build_reference_snapshot(weekly_summary, selected_end_date),
+    }
+
+    module_renderers = {
+        "dashboard": render_dashboard_module,
+        "planner": render_planner_module,
+        "reports": render_reports_module,
+        "details": render_details_module,
+        "admin": render_admin_module,
+    }
+    module_renderer = module_renderers.get(active_module, render_dashboard_module)
+    module_renderer(module_data, ui)
 
 
 def render_analysis_main(
@@ -4410,6 +4699,7 @@ with app_sidebar:
         prev_meta=prev_meta,
         curr_meta=curr_meta,
     )
+    active_module = render_module_navigation()
 
 date_basis = filter_state["date_basis"]
 selected_start_date = filter_state["selected_start_date"]
@@ -4489,7 +4779,8 @@ with app_sidebar:
     render_export_actions(csv_bytes, excel_bytes)
 
 with app_main:
-    render_analysis_main(
+    render_module_frame(
+        active_module,
         filtered_df,
         planner_source,
         product_summary,
@@ -4586,6 +4877,7 @@ except Exception as exc:
 brand_context = detect_brand_context(prev_meta, curr_meta)
 with app_sidebar:
     filter_state = render_analysis_side_panel(result, brand_context)
+    active_module = render_module_navigation()
 
 date_basis = filter_state["date_basis"]
 selected_start_date = filter_state["selected_start_date"]
@@ -4644,7 +4936,8 @@ key_findings = build_key_findings(
 )
 
 with app_main:
-    render_analysis_main(
+    render_module_frame(
+        active_module,
         filtered_df,
         planner_source,
         product_summary,
