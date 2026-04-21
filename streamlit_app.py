@@ -770,6 +770,11 @@ st.markdown(
     .stVegaLiteChart summary {
         display: none !important;
     }
+    /* Hide Streamlit's fullscreen toolbar for Vega/Altair cards to keep charts clean. */
+    div[data-testid="stFullScreenFrame"]:has(div[data-testid="stVegaLiteChart"])
+        [data-testid="stElementToolbar"] {
+        display: none !important;
+    }
     @media (max-width: 920px) {
         .hero-title {
             font-size: 2rem;
@@ -794,12 +799,488 @@ st.markdown(
 )
 st.markdown(
     """
-    <div class="section-banner">
-        <div class="section-kicker">Premium Release Intelligence</div>
-        <div class="section-copy">
-            Prześlij poprzedni i aktualny release. Dashboard porówna zamówienia po dacie wysyłki
-            lub odbioru, pokaże wzrosty, spadki, alerty oraz gotowy raport do dalszej pracy.
+    <style>
+    :root {
+        --bg-primary: #0b1120;
+        --bg-secondary: #111827;
+        --bg-tertiary: #162033;
+        --bg-elevated: rgba(17, 24, 39, 0.88);
+        --surface-soft: rgba(15, 23, 42, 0.72);
+        --text-primary: #f8fafc;
+        --text-secondary: #cbd5e1;
+        --text-muted: #94a3b8;
+        --border-soft: rgba(148, 163, 184, 0.16);
+        --border-strong: rgba(148, 163, 184, 0.28);
+        --accent-blue: #38bdf8;
+        --accent-green: #34d399;
+        --accent-red: #f87171;
+        --accent-amber: #fbbf24;
+        --shadow-soft: 0 18px 40px rgba(2, 6, 23, 0.24);
+    }
+    .stApp {
+        background: linear-gradient(180deg, #09101e 0%, #0d1528 48%, #101829 100%) !important;
+        color: var(--text-primary) !important;
+    }
+    .block-container {
+        max-width: 1680px !important;
+        padding-top: 0.9rem !important;
+        padding-bottom: 2.2rem !important;
+    }
+    h1, h2, h3, h4 {
+        color: var(--text-primary) !important;
+        font-family: "Aptos Display", "Segoe UI", "Aptos", "Helvetica Neue", Arial, sans-serif !important;
+        letter-spacing: -0.03em !important;
+        line-height: 1.05 !important;
+        text-wrap: balance;
+    }
+    p, label, span, div {
+        text-wrap: pretty;
+    }
+    .app-shell-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 1rem;
+        align-items: end;
+        border: 1px solid var(--border-soft);
+        border-radius: 24px;
+        padding: 1.15rem 1.25rem;
+        margin-bottom: 1rem;
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.65));
+        box-shadow: var(--shadow-soft);
+    }
+    .app-shell-kicker,
+    .app-header__eyebrow {
+        font-size: 0.74rem;
+        font-weight: 800;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--accent-blue);
+        margin-bottom: 0.45rem;
+    }
+    .app-shell-title,
+    .app-header__title {
+        font-size: clamp(1.9rem, 1.55rem + 0.8vw, 2.7rem);
+        font-weight: 800;
+        color: var(--text-primary);
+        margin-bottom: 0.4rem;
+    }
+    .app-shell-copy,
+    .app-header__subtitle {
+        color: var(--text-secondary);
+        font-size: 0.97rem;
+        line-height: 1.7;
+        max-width: 70ch;
+    }
+    .app-shell-chip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        border: 1px solid rgba(56, 189, 248, 0.22);
+        background: rgba(56, 189, 248, 0.08);
+        color: var(--text-primary);
+        padding: 0.55rem 0.9rem;
+        font-size: 0.8rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .app-header {
+        display: grid;
+        grid-template-columns: minmax(0, 1.55fr) minmax(220px, 0.75fr);
+        gap: 1rem;
+        align-items: start;
+        border: 1px solid var(--border-soft);
+        border-radius: 24px;
+        padding: 1.2rem;
+        margin-bottom: 1rem;
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.72));
+        box-shadow: var(--shadow-soft);
+    }
+    .app-header__banner {
+        display: grid;
+        gap: 0.5rem;
+    }
+    .app-header-caption {
+        color: var(--text-muted);
+        font-size: 0.8rem;
+        line-height: 1.5;
+        text-align: center;
+    }
+    .context-chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.85rem;
+    }
+    .context-chip,
+    .compact-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        border-radius: 999px;
+        padding: 0.42rem 0.78rem;
+        border: 1px solid var(--border-soft);
+        background: rgba(148, 163, 184, 0.08);
+        color: var(--text-secondary);
+        font-size: 0.78rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+    .file-type-banner {
+        border-radius: 20px !important;
+        border: 1px solid var(--border-soft) !important;
+        box-shadow: none !important;
+        background: linear-gradient(180deg, rgba(30, 41, 59, 0.88), rgba(15, 23, 42, 0.92)) !important;
+    }
+    .file-type-banner::before {
+        opacity: 0.35 !important;
+    }
+    .file-type-banner--tesla {
+        background: linear-gradient(180deg, rgba(100, 116, 139, 0.32), rgba(51, 65, 85, 0.92)) !important;
+    }
+    .file-type-banner--mercedes {
+        background: linear-gradient(180deg, rgba(71, 85, 105, 0.4), rgba(15, 23, 42, 0.92)) !important;
+    }
+    .file-type-banner--audi {
+        background: linear-gradient(180deg, rgba(59, 72, 89, 0.42), rgba(15, 23, 42, 0.92)) !important;
+    }
+    .file-type-banner--default {
+        background: linear-gradient(180deg, rgba(30, 41, 59, 0.88), rgba(15, 23, 42, 0.92)) !important;
+    }
+    .file-type-banner__text {
+        letter-spacing: 0.16em !important;
+        font-size: clamp(1.05rem, 0.96rem + 0.55vw, 1.55rem) !important;
+    }
+    .filter-panel-shell,
+    .upload-card,
+    .quick-card,
+    .meta-card,
+    .finding-card,
+    .compact-brand-box,
+    .sidebar-user-card {
+        border: 1px solid var(--border-soft) !important;
+        background: linear-gradient(180deg, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.74)) !important;
+        box-shadow: none !important;
+        border-radius: 20px !important;
+    }
+    .filter-panel-shell {
+        padding: 1rem 1rem 1.05rem 1rem !important;
+        margin-bottom: 0.9rem;
+        position: sticky;
+        top: 0.85rem;
+        backdrop-filter: blur(12px);
+    }
+    .filter-panel-title,
+    .upload-title,
+    .quick-title,
+    .finding-title {
+        color: var(--text-primary) !important;
+    }
+    .filter-panel-copy,
+    .upload-copy,
+    .quick-copy,
+    .finding-copy,
+    .meta-value,
+    .sidebar-user-role {
+        color: var(--text-secondary) !important;
+    }
+    .section-head {
+        margin: 0.2rem 0 0.85rem 0;
+    }
+    .section-title {
+        color: var(--text-primary);
+        font-size: 1.18rem;
+        font-weight: 800;
+        margin-bottom: 0.25rem;
+        letter-spacing: -0.02em;
+    }
+    .section-copy {
+        color: var(--text-muted);
+        font-size: 0.92rem;
+        line-height: 1.65;
+        max-width: 72ch;
+    }
+    .report-metadata-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+    }
+    .report-meta-card {
+        border: 1px solid var(--border-soft);
+        border-radius: 18px;
+        padding: 0.9rem 1rem;
+        background: rgba(15, 23, 42, 0.72);
+    }
+    .report-meta-label {
+        color: var(--text-muted);
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        margin-bottom: 0.35rem;
+    }
+    .report-meta-value {
+        color: var(--text-primary);
+        font-size: 0.97rem;
+        font-weight: 700;
+        line-height: 1.45;
+    }
+    .kpi-card {
+        border: 1px solid var(--border-soft);
+        border-radius: 18px;
+        padding: 1rem 1rem 0.95rem 1rem;
+        background: rgba(15, 23, 42, 0.78);
+        min-height: 138px;
+    }
+    .kpi-card--positive {
+        border-color: rgba(52, 211, 153, 0.24);
+    }
+    .kpi-card--negative {
+        border-color: rgba(248, 113, 113, 0.24);
+    }
+    .kpi-label {
+        color: var(--text-muted);
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        margin-bottom: 0.5rem;
+    }
+    .kpi-value {
+        color: var(--text-primary);
+        font-size: 1.65rem;
+        font-weight: 800;
+        letter-spacing: -0.04em;
+        margin-bottom: 0.45rem;
+        line-height: 1;
+    }
+    .kpi-copy {
+        color: var(--text-secondary);
+        font-size: 0.84rem;
+        line-height: 1.55;
+    }
+    .insight-card {
+        border: 1px solid var(--border-soft);
+        border-radius: 18px;
+        padding: 1rem;
+        background: rgba(15, 23, 42, 0.76);
+        min-height: 190px;
+    }
+    .insight-card--critical {
+        border-color: rgba(248, 113, 113, 0.26);
+        background: linear-gradient(180deg, rgba(69, 20, 26, 0.42), rgba(15, 23, 42, 0.78));
+    }
+    .insight-card--positive {
+        border-color: rgba(52, 211, 153, 0.24);
+    }
+    .insight-badge {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 0.34rem 0.68rem;
+        margin-bottom: 0.75rem;
+        background: rgba(148, 163, 184, 0.1);
+        color: var(--text-primary);
+        font-size: 0.74rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+    .insight-title {
+        color: var(--text-primary);
+        font-size: 1.08rem;
+        font-weight: 800;
+        line-height: 1.25;
+        margin-bottom: 0.45rem;
+    }
+    .insight-copy {
+        color: var(--text-secondary);
+        font-size: 0.88rem;
+        line-height: 1.6;
+    }
+    .upload-status-grid {
+        display: grid;
+        gap: 0.7rem;
+        margin-top: 0.85rem;
+        margin-bottom: 0.85rem;
+    }
+    .upload-status-card {
+        border: 1px solid var(--border-soft);
+        border-radius: 18px;
+        padding: 0.9rem 1rem;
+        background: rgba(15, 23, 42, 0.72);
+    }
+    .upload-status-card--ready {
+        border-color: rgba(52, 211, 153, 0.24);
+    }
+    .upload-status-card--pending {
+        border-color: rgba(56, 189, 248, 0.22);
+    }
+    .upload-status-label {
+        color: var(--text-muted);
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        margin-bottom: 0.35rem;
+    }
+    .upload-status-name {
+        color: var(--text-primary);
+        font-size: 0.95rem;
+        font-weight: 800;
+        line-height: 1.35;
+        margin-bottom: 0.25rem;
+        word-break: break-word;
+    }
+    .upload-status-meta {
+        color: var(--text-secondary);
+        font-size: 0.82rem;
+        line-height: 1.5;
+        margin-bottom: 0.2rem;
+    }
+    .upload-status-caption {
+        color: var(--text-muted);
+        font-size: 0.78rem;
+        line-height: 1.5;
+    }
+    div[data-testid="stMetric"] {
+        background: rgba(15, 23, 42, 0.76) !important;
+        border: 1px solid var(--border-soft) !important;
+        box-shadow: none !important;
+        border-radius: 18px !important;
+    }
+    div[data-testid="stMetric"] label,
+    div[data-testid="stMetric"] [data-testid="stMetricLabel"] {
+        color: var(--text-muted) !important;
+    }
+    div[data-testid="stMetricValue"] {
+        color: var(--text-primary) !important;
+    }
+    div[data-testid="stMetricDelta"] {
+        color: var(--accent-blue) !important;
+    }
+    div[data-testid="stAlert"] {
+        border-radius: 18px !important;
+        border: 1px solid var(--border-soft) !important;
+        background: rgba(15, 23, 42, 0.84) !important;
+        box-shadow: none !important;
+    }
+    div[data-testid="stVegaLiteChart"],
+    div[data-testid="stDataFrame"] {
+        border-radius: 20px !important;
+        border: 1px solid var(--border-soft) !important;
+        background: rgba(15, 23, 42, 0.78) !important;
+        box-shadow: none !important;
+    }
+    section[data-testid="stFileUploader"] {
+        border: 1px solid var(--border-soft) !important;
+        border-radius: 18px !important;
+        background: rgba(15, 23, 42, 0.74) !important;
+        box-shadow: none !important;
+        padding: 0.35rem 0.5rem 0.55rem 0.5rem !important;
+    }
+    div[data-testid="stFileUploaderDropzone"] {
+        border: 1px dashed rgba(148, 163, 184, 0.26) !important;
+        border-radius: 14px !important;
+        background: transparent !important;
+        padding: 1rem 0.9rem !important;
+    }
+    div[data-baseweb="input"] > div,
+    div[data-baseweb="base-input"] > div,
+    div[data-baseweb="select"] > div,
+    .stDateInput > div > div,
+    .stMultiSelect [data-baseweb="tag"],
+    .stTextInput > div > div > input {
+        background: rgba(15, 23, 42, 0.78) !important;
+        border-color: var(--border-soft) !important;
+        color: var(--text-primary) !important;
+        border-radius: 14px !important;
+    }
+    [data-testid="stButtonGroup"] {
+        width: 100%;
+        margin-bottom: 0.2rem;
+    }
+    [data-testid="stButtonGroup"] > div {
+        width: 100%;
+    }
+    [data-testid="stButtonGroup"] button {
+        border-radius: 12px !important;
+        border: 1px solid var(--border-soft) !important;
+        background: rgba(15, 23, 42, 0.78) !important;
+        color: var(--text-secondary) !important;
+    }
+    [data-testid="stButtonGroup"] button[kind*="Active"] {
+        background: rgba(56, 189, 248, 0.14) !important;
+        border-color: rgba(56, 189, 248, 0.24) !important;
+        color: var(--text-primary) !important;
+    }
+    div[data-baseweb="tab-list"] {
+        gap: 0.4rem !important;
+        margin-bottom: 0.7rem;
+    }
+    button[data-baseweb="tab"] {
+        border-radius: 999px !important;
+        background: rgba(15, 23, 42, 0.76) !important;
+        border: 1px solid var(--border-soft) !important;
+        color: var(--text-secondary) !important;
+        padding: 0.48rem 0.92rem !important;
+    }
+    button[data-baseweb="tab"][aria-selected="true"] {
+        background: rgba(56, 189, 248, 0.14) !important;
+        border-color: rgba(56, 189, 248, 0.22) !important;
+        color: var(--text-primary) !important;
+    }
+    button[kind="primary"],
+    button[kind="secondary"] {
+        border-radius: 14px !important;
+        box-shadow: none !important;
+        border: 1px solid var(--border-soft) !important;
+    }
+    button[kind="primary"] {
+        background: rgba(56, 189, 248, 0.14) !important;
+        color: var(--text-primary) !important;
+        border-color: rgba(56, 189, 248, 0.24) !important;
+    }
+    button[kind="secondary"] {
+        background: rgba(15, 23, 42, 0.76) !important;
+        color: var(--text-primary) !important;
+    }
+    .stDownloadButton button {
+        width: 100%;
+    }
+    @media (max-width: 1200px) {
+        .report-metadata-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .app-header {
+            grid-template-columns: 1fr;
+        }
+    }
+    @media (max-width: 920px) {
+        .app-shell-header {
+            grid-template-columns: 1fr;
+        }
+        .report-metadata-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+    @media (max-width: 640px) {
+        .report-metadata-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+    </style>
+    <div class="app-shell-header">
+        <div>
+            <div class="app-shell-kicker">Premium Release Intelligence</div>
+            <div class="app-shell-title">Nowoczesny dashboard analityczny dla porównań release'ów</div>
+            <div class="app-shell-copy">
+                Upload, filtry, metadane, alerty i eksport działają teraz jako jeden spójny workspace
+                do codziennej pracy z danymi planistycznymi i logistycznymi.
+            </div>
         </div>
+        <div class="app-shell-chip">Streamlit Analytics Workspace</div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -911,14 +1392,18 @@ def render_chart_table_switch(
 ):
     state_key = f"{key}_view_mode"
     st.session_state.setdefault(state_key, "chart")
-    selected_view = st.radio(
-        "Widok",
+    selected_view = st.segmented_control(
+        "Widok sekcji",
         options=["chart", "table"],
+        selection_mode="single",
+        default=st.session_state[state_key],
+        required=True,
         key=state_key,
-        horizontal=True,
         label_visibility="collapsed",
         format_func=get_view_mode_label,
+        width="stretch",
     )
+    selected_view = selected_view or st.session_state[state_key]
 
     if selected_view == "chart":
         if chart is None:
@@ -996,6 +1481,449 @@ def render_quick_card(title, copy):
         </div>
         """,
         unsafe_allow_html=True,
+    )
+
+
+def format_file_type_label(file_type):
+    mapping = {
+        "legacy_wide": "Tesla / ReleaseData",
+        "vl10e_block": "Mercedes / VL10E",
+        "cw_weekly_pivot": "Audi Q7/Q9 weekly",
+    }
+    return mapping.get(str(file_type or "").strip().lower(), "Nieznany format")
+
+
+def guess_file_type_label(file_name):
+    normalized = str(file_name or "").strip().lower()
+    if any(keyword in normalized for keyword in ["vl10e", "mercedes", "merc"]):
+        return "Mercedes / VL10E"
+    if any(keyword in normalized for keyword in ["audi", "q7", "q9", "megatech", "cw17"]):
+        return "Audi Q7/Q9 weekly"
+    if any(keyword in normalized for keyword in ["tesla", "releasedata", "raw"]):
+        return "Tesla / ReleaseData"
+    return "Oczekuje na rozpoznanie parsera"
+
+
+def count_status_matches(dataframe, *keywords):
+    if dataframe.empty or "Demand Status" not in dataframe.columns:
+        return 0
+    normalized = dataframe["Demand Status"].fillna("").astype(str).str.lower()
+    return int(
+        normalized.apply(lambda value: any(keyword in value for keyword in keywords)).sum()
+    )
+
+
+def render_section_header(kicker, title, copy=None):
+    copy_html = (
+        f'<div class="section-copy">{html.escape(str(copy))}</div>'
+        if copy
+        else ""
+    )
+    st.markdown(
+        f"""
+        <div class="section-head">
+            <div class="section-kicker">{html.escape(str(kicker))}</div>
+            <div class="section-title">{html.escape(str(title))}</div>
+            {copy_html}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_app_header(brand_context, title, subtitle, meta_items=None, file_caption=""):
+    meta_items = meta_items or []
+    chips_html = "".join(
+        f'<div class="context-chip">{html.escape(str(item))}</div>'
+        for item in meta_items
+        if item
+    )
+    chips_html = (
+        f'<div class="context-chip-row">{chips_html}</div>' if chips_html else ""
+    )
+    banner_html = build_file_type_banner_markup(brand_context, variant="header")
+    caption_html = (
+        f'<div class="app-header-caption">{html.escape(str(file_caption))}</div>'
+        if file_caption
+        else ""
+    )
+    st.markdown(
+        f"""
+        <div class="app-header">
+            <div class="app-header__copy">
+                <div class="app-header__eyebrow">Pjoter Development Analytics</div>
+                <div class="app-header__title">{html.escape(str(title))}</div>
+                <div class="app-header__subtitle">{html.escape(str(subtitle))}</div>
+                {chips_html}
+            </div>
+            <div class="app-header__banner">
+                {banner_html}
+                {caption_html}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_report_metadata(items):
+    cards_html = "".join(
+        f"""
+        <div class="report-meta-card">
+            <div class="report-meta-label">{html.escape(str(item.get('label', '')))}</div>
+            <div class="report-meta-value">{html.escape(str(item.get('value', 'n/a')))}</div>
+        </div>
+        """
+        for item in items
+    )
+    st.markdown(
+        f'<div class="report-metadata-grid">{cards_html}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_kpi_cards(metrics):
+    metric_cols = st.columns(len(metrics), gap="medium")
+    for index, metric in enumerate(metrics):
+        tone = html.escape(str(metric.get("tone", "neutral")))
+        with metric_cols[index]:
+            st.markdown(
+                f"""
+                <div class="kpi-card kpi-card--{tone}">
+                    <div class="kpi-label">{html.escape(str(metric.get('label', '')))}</div>
+                    <div class="kpi-value">{html.escape(str(metric.get('value', '0')))}</div>
+                    <div class="kpi-copy">{html.escape(str(metric.get('copy', '')))}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+def build_kpi_metrics(filtered_df, product_summary):
+    increase_total = filtered_df.loc[filtered_df["Delta"] > 0, "Delta"].sum()
+    decrease_total = abs(filtered_df.loc[filtered_df["Delta"] < 0, "Delta"].sum())
+    changed_rows = int((filtered_df["Delta"] != 0).sum())
+    new_positions = count_status_matches(filtered_df, "new")
+    removed_positions = count_status_matches(filtered_df, "removed", "delete")
+    percent_series = pd.to_numeric(filtered_df["Percent Change"], errors="coerce")
+    finite_percent = percent_series[pd.notna(percent_series) & percent_series.ne(float("inf")) & percent_series.ne(float("-inf"))]
+    largest_percent = (
+        format_signed_pct(finite_percent.loc[finite_percent.abs().idxmax()])
+        if not finite_percent.empty
+        else "n/a"
+    )
+
+    return [
+        {
+            "label": "Liczba zmian",
+            "value": f"{changed_rows:,}",
+            "copy": "Wiersze z inną ilością niż w poprzednim release.",
+            "tone": "neutral",
+        },
+        {
+            "label": "Łączny wzrost",
+            "value": f"{increase_total:,.0f}",
+            "copy": "Suma dodatnich zmian w aktualnym widoku.",
+            "tone": "positive",
+        },
+        {
+            "label": "Łączny spadek",
+            "value": f"{decrease_total:,.0f}",
+            "copy": "Suma spadków wymagających weryfikacji.",
+            "tone": "negative",
+        },
+        {
+            "label": "Nowe pozycje",
+            "value": f"{new_positions:,}",
+            "copy": "Wiersze oznaczone jako nowy demand.",
+            "tone": "neutral",
+        },
+        {
+            "label": "Usunięte pozycje",
+            "value": f"{removed_positions:,}",
+            "copy": "Wiersze oznaczone jako removed demand.",
+            "tone": "negative",
+        },
+        {
+            "label": "Największa zmiana %",
+            "value": largest_percent,
+            "copy": f"Największy ruch procentowy w {product_summary['Part Number'].nunique():,} produktach.",
+            "tone": "neutral",
+        },
+    ]
+
+
+def build_alert_items(filtered_df, key_findings):
+    alert_items = []
+    alert_count = int(filtered_df["Alert"].sum())
+    if alert_count:
+        alert_items.append(
+            {
+                "badge": "Wysoki priorytet",
+                "title": f"{alert_count:,} pozycji przekracza próg {THRESHOLD}%",
+                "copy": "Te wiersze mają największy potencjał wpływu na plan i warto je sprawdzić w pierwszej kolejności.",
+                "tone": "critical",
+            }
+        )
+
+    new_positions = count_status_matches(filtered_df, "new")
+    if new_positions:
+        alert_items.append(
+            {
+                "badge": "Nowy demand",
+                "title": f"{new_positions:,} nowych pozycji w aktualnym zakresie",
+                "copy": "Pojawiły się nowe linie zapotrzebowania, które nie występowały w poprzednim release.",
+                "tone": "positive",
+            }
+        )
+
+    removed_positions = count_status_matches(filtered_df, "removed", "delete")
+    if removed_positions:
+        alert_items.append(
+            {
+                "badge": "Removed demand",
+                "title": f"{removed_positions:,} pozycji zostało usuniętych",
+                "copy": "Warto potwierdzić, czy zniknięcie tych pozycji jest oczekiwane biznesowo.",
+                "tone": "negative",
+            }
+        )
+
+    for finding in key_findings:
+        alert_items.append(
+            {
+                "badge": finding["label"],
+                "title": finding["title"],
+                "copy": finding["copy"],
+                "tone": "neutral",
+            }
+        )
+
+    return alert_items[:4]
+
+
+def render_alerts(alert_items):
+    if not alert_items:
+        st.markdown(
+            """
+            <div class="insight-card insight-card--neutral">
+                <div class="insight-badge">Stabilny zakres</div>
+                <div class="insight-title">Brak istotnych alertów w aktywnym widoku</div>
+                <div class="insight-copy">Po zastosowanych filtrach nie ma sygnałów, które przekraczałyby próg ostrzegawczy.</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        return
+
+    insight_cols = st.columns(len(alert_items), gap="medium")
+    for index, item in enumerate(alert_items):
+        tone = html.escape(str(item.get("tone", "neutral")))
+        with insight_cols[index]:
+            st.markdown(
+                f"""
+                <div class="insight-card insight-card--{tone}">
+                    <div class="insight-badge">{html.escape(str(item.get('badge', 'Insight')))}</div>
+                    <div class="insight-title">{html.escape(str(item.get('title', '')))}</div>
+                    <div class="insight-copy">{html.escape(str(item.get('copy', '')))}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+def build_file_slot_payload(slot_label, file_obj=None, meta=None):
+    if meta:
+        return {
+            "slot": slot_label,
+            "status": "Załadowany",
+            "name": meta.get("file_name", "n/a"),
+            "detail": format_file_type_label(meta.get("file_type")),
+            "caption": f"Release {format_release_summary(meta)}",
+            "tone": "ready",
+        }
+    if file_obj is not None:
+        return {
+            "slot": slot_label,
+            "status": "Plik dodany",
+            "name": file_obj.name,
+            "detail": guess_file_type_label(file_obj.name),
+            "caption": "Plik czeka na wspólne uruchomienie analizy.",
+            "tone": "pending",
+        }
+    return {
+        "slot": slot_label,
+        "status": "Oczekiwanie",
+        "name": "Brak pliku",
+        "detail": "Dodaj plik wejściowy",
+        "caption": "Sekcja uzupełni się po dodaniu pliku.",
+        "tone": "empty",
+    }
+
+
+def render_file_slot_cards(prev_file=None, current_file=None, prev_meta=None, curr_meta=None):
+    slots = [
+        build_file_slot_payload("Poprzedni plik", prev_file, prev_meta),
+        build_file_slot_payload("Aktualny plik", current_file, curr_meta),
+    ]
+    markup = "".join(
+        f"""
+        <div class="upload-status-card upload-status-card--{html.escape(str(slot['tone']))}">
+            <div class="upload-status-label">{html.escape(str(slot['slot']))}</div>
+            <div class="upload-status-name">{html.escape(str(slot['name']))}</div>
+            <div class="upload-status-meta">{html.escape(str(slot['status']))} · {html.escape(str(slot['detail']))}</div>
+            <div class="upload-status-caption">{html.escape(str(slot['caption']))}</div>
+        </div>
+        """
+        for slot in slots
+    )
+    st.markdown(
+        f'<div class="upload-status-grid">{markup}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_upload_section():
+    render_section_header(
+        "Workspace",
+        "Pliki wejściowe",
+        "Dodaj poprzedni i aktualny release. Panel po lewej utrzymuje cały kontekst analizy w jednym miejscu.",
+    )
+    render_upload_card(
+        "Poprzedni",
+        "Baseline release",
+        "Plik referencyjny, do którego porównywany będzie aktualny stan planu i wysyłek.",
+    )
+    prev_file = st.file_uploader(
+        "Upload Previous Release",
+        type=["xlsx"],
+        key="previous_release_upload",
+        label_visibility="collapsed",
+    )
+    render_upload_card(
+        "Aktualny",
+        "Current release",
+        "Nowy plik wejściowy, z którego aplikacja policzy zmiany, alerty i bilans wolumenu.",
+    )
+    current_file = st.file_uploader(
+        "Upload Current Release",
+        type=["xlsx"],
+        key="current_release_upload",
+        label_visibility="collapsed",
+    )
+    return prev_file, current_file
+
+
+def render_export_actions(csv_bytes, excel_bytes):
+    render_section_header(
+        "Eksport",
+        "Pobierz wyniki",
+        "Pobierz przefiltrowane dane albo pełny raport Excel bez opuszczania panelu roboczego.",
+    )
+    st.download_button(
+        "Pobierz filtrowane dane CSV",
+        data=csv_bytes,
+        file_name="pjoter_development_release_change_filtered.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
+    st.download_button(
+        "Pobierz raport Excel",
+        data=excel_bytes,
+        file_name="pjoter_development_release_change_report.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True,
+    )
+
+
+def render_welcome_state(prev_file, current_file):
+    brand_context = detect_brand_context(
+        *(meta for meta in [
+            {"file_name": prev_file.name} if prev_file is not None else None,
+            {"file_name": current_file.name} if current_file is not None else None,
+        ] if meta)
+    )
+    title = "Premium dashboard porównawczy dla release'ów"
+    subtitle = (
+        "Po załadowaniu dwóch plików aplikacja zbuduje raport KPI, alerty, widoki tygodniowe, "
+        "tabele szczegółowe i eksport gotowy do dalszej pracy operacyjnej."
+    )
+    meta_items = [
+        "Upload po lewej stronie",
+        "Porównanie daily i weekly",
+        "Eksport CSV / Excel",
+    ]
+    if prev_file is not None or current_file is not None:
+        meta_items.append("1 / 2 plików gotowe" if prev_file is None or current_file is None else "2 / 2 plików gotowe")
+    render_app_header(brand_context, title, subtitle, meta_items)
+
+    render_section_header(
+        "Jak działa workspace",
+        "Jeden panel do uploadu, filtrów i eksportu",
+        "Lewa kolumna utrzymuje stały kontekst pracy, a prawa część skupia się wyłącznie na wynikach i analizie.",
+    )
+    quick_cols = st.columns(3, gap="medium")
+    with quick_cols[0]:
+        render_quick_card(
+            "Szybkie KPI",
+            "Najważniejsze liczby i sygnały są zawsze na górze raportu, gotowe do szybkiego odczytu.",
+        )
+    with quick_cols[1]:
+        render_quick_card(
+            "Insighty i alerty",
+            "Sekcja alertów porządkuje anomalie, nowe pozycje i zmiany przekraczające ustalony próg.",
+        )
+    with quick_cols[2]:
+        render_quick_card(
+            "Stabilny kontekst analizy",
+            "Filtry, upload i eksport pozostają w jednym miejscu, dzięki czemu dashboard nie gubi kontekstu pracy.",
+        )
+
+    if prev_file is None and current_file is None:
+        st.info("Dodaj dwa pliki Excel w panelu po lewej, aby uruchomić porównanie release'ów.")
+    else:
+        missing_label = "poprzedni" if prev_file is None else "aktualny"
+        st.info(
+            f"Jeden plik jest już gotowy. Dodaj jeszcze plik {missing_label}, aby uruchomić pełną analizę."
+        )
+
+
+def build_detail_export_table(dataframe):
+    detail_table = dataframe[available_detail_columns(dataframe)].copy()
+    if "Ship Date" in detail_table.columns:
+        detail_table["Ship Date"] = detail_table["Ship Date"].dt.strftime("%Y-%m-%d")
+    if "Receipt Date" in detail_table.columns:
+        detail_table["Receipt Date"] = detail_table["Receipt Date"].dt.strftime("%Y-%m-%d")
+    if "Change Direction" in detail_table.columns:
+        detail_table["Change Direction"] = detail_table["Change Direction"].map(
+            get_change_label
+        )
+    if "Alert" in detail_table.columns:
+        detail_table["Alert"] = detail_table["Alert"].map(
+            lambda value: "Tak" if value else "Nie"
+        )
+    return detail_table.rename(
+        columns={
+            "PO Number": "Numer PO",
+            "Origin Doc": "Origin Doc",
+            "Item": "Pozycja",
+            "Ship To": "Ship-to",
+            "Part Number": "Numer części",
+            "Part Description": "Opis produktu",
+            "Customer Material": "Materiał klienta",
+            "Unrestricted Qty": "Ilość unrestr.",
+            "Unloading Point": "Punkt rozładunku",
+            "Ship Date": "Data wysyłki",
+            "Receipt Date": "Data odbioru",
+            "Unit of Measure": "JM",
+            "CumQty": "CumQty",
+            "Quantity_Prev": "Poprzednia ilość",
+            "Quantity_Curr": "Aktualna ilość",
+            "Delta": "Zmiana ilości",
+            "Percent Change": "Zmiana %",
+            "Demand Status": "Status popytu",
+            "Change Direction": "Kierunek zmiany",
+            "Alert": "Alert",
+        }
     )
 
 
@@ -1314,31 +2242,21 @@ def render_side_panel_brand(brand_context):
 
 def render_compact_header(brand_context, prev_meta, curr_meta, date_basis, selected_start_date, selected_end_date):
     format_context = describe_format_context(prev_meta, curr_meta)
-    brand_banner_html = build_file_type_banner_markup(brand_context, variant="header")
-    st.markdown(
-        f"""
-        <div class="compact-header">
-            <div>
-                <div class="compact-header-kicker">Release Intelligence</div>
-                <div class="compact-header-title">Raport zmian dla PO {html.escape(str(curr_meta.get('po_number', 'n/a')))}</div>
-                <div class="compact-header-copy">
-                    {html.escape(brand_context.get('status', 'Klient: neutralny'))}. {html.escape(brand_context.get('format_copy', ''))}
-                    Okno analizy obejmuje zakres {selected_start_date.strftime('%Y-%m-%d')} do {selected_end_date.strftime('%Y-%m-%d')}
-                    na osi {html.escape(get_date_label(date_basis))}.
-                </div>
-                <div class="compact-pill-row">
-                    <div class="compact-pill">{html.escape(format_context)}</div>
-                    <div class="compact-pill">Poprzedni: {html.escape(format_release_label(prev_meta))}</div>
-                    <div class="compact-pill">Aktualny: {html.escape(format_release_label(curr_meta))}</div>
-                </div>
-            </div>
-            <div class="compact-brand-box">
-                {brand_banner_html}
-                <div class="compact-brand-copy">{html.escape(curr_meta.get('file_name', ''))}</div>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_app_header(
+        brand_context,
+        f"Raport zmian dla PO {curr_meta.get('po_number', 'n/a')}",
+        (
+            f"{brand_context.get('status', 'Klient: neutralny')}. "
+            f"{brand_context.get('format_copy', '')} "
+            f"Zakres analizy: {selected_start_date:%Y-%m-%d} do {selected_end_date:%Y-%m-%d} "
+            f"na osi {get_date_label(date_basis)}."
+        ),
+        [
+            format_context,
+            f"Poprzedni: {format_release_label(prev_meta)}",
+            f"Aktualny: {format_release_label(curr_meta)}",
+        ],
+        curr_meta.get("file_name", ""),
     )
 
 
@@ -1348,10 +2266,10 @@ def apply_chart_theme(chart):
         .configure(background="transparent")
         .configure_axis(
             grid=False,
-            domainColor="#384d6d",
-            tickColor="#607a9e",
-            labelColor="#e7f0ff",
-            titleColor="#f4fbff",
+            domainColor="#334155",
+            tickColor="#64748b",
+            labelColor="#94a3b8",
+            titleColor="#e2e8f0",
             labelFontSize=12,
             titleFontSize=13,
             tickSize=6,
@@ -1360,28 +2278,28 @@ def apply_chart_theme(chart):
         )
         .configure_axisX(
             grid=True,
-            gridColor="#1f2f46",
-            gridDash=[3, 5],
+            gridColor="rgba(148, 163, 184, 0.12)",
+            gridDash=[2, 6],
             domain=False,
-            tickColor="#728ab5",
-            labelColor="#c8d6e8",
+            tickColor="#64748b",
+            labelColor="#94a3b8",
         )
         .configure_axisY(
             grid=True,
-            gridColor="#1f2f46",
-            gridDash=[3, 5],
+            gridColor="rgba(148, 163, 184, 0.12)",
+            gridDash=[2, 6],
             domain=False,
-            tickColor="#728ab5",
-            labelColor="#c8d6e8",
+            tickColor="#64748b",
+            labelColor="#94a3b8",
         )
         .configure_legend(
-            labelColor="#c8d6e8",
-            titleColor="#f4fbff",
+            labelColor="#cbd5e1",
+            titleColor="#e2e8f0",
             labelFontSize=12,
             titleFontSize=13,
             symbolType="circle",
         )
-        .configure_title(color="#f4fbff", fontSize=16, fontWeight="bold", anchor="start")
+        .configure_title(color="#f8fafc", fontSize=16, fontWeight="bold", anchor="start")
     )
 
 
@@ -1398,74 +2316,6 @@ def normalize_date_selection(selection, default_start, default_end):
     if len(values) == 1:
         return values[0], values[0]
     return values[0], values[1]
-
-
-def render_filter_controls(result):
-    render_filter_panel_shell()
-    if logo_available():
-        st.image(str(LOGO_PATH), use_container_width=True)
-
-    st.markdown("### Filtry")
-    date_basis = st.radio(
-        "Oś dat",
-        DATE_OPTIONS,
-        index=0,
-        format_func=get_date_label,
-    )
-
-    available_dates = result[date_basis].dropna().sort_values()
-    min_date = available_dates.min().date()
-    max_date = available_dates.max().date()
-
-    st.markdown("---")
-    st.markdown("##### Zakres czasowy")
-    selected_date_input = st.date_input(
-        "Wybierz przedział dat:",
-        value=(min_date, max_date),
-        min_value=min_date,
-        max_value=max_date,
-        help="Kliknij, aby wybrać pojedynczy dzień lub zakres dat do analizy.",
-        label_visibility="collapsed",
-    )
-    selected_start_date, selected_end_date = normalize_date_selection(
-        selected_date_input, min_date, max_date
-    )
-    swapped_dates = selected_start_date > selected_end_date
-    if swapped_dates:
-        selected_start_date, selected_end_date = selected_end_date, selected_start_date
-        st.warning("Zamieniono kolejność dat, aby zachować poprawny zakres analizy.")
-
-    st.caption(
-        f"Zakres: {selected_start_date.strftime('%Y-%m-%d')} → {selected_end_date.strftime('%Y-%m-%d')}"
-    )
-    st.markdown("---")
-
-    full_product_summary = summarize_products(result)
-    all_products = full_product_summary["Product Label"].tolist()
-    selected_products = st.multiselect(
-        "Produkty",
-        options=all_products,
-        default=all_products,
-    )
-    search_term = st.text_input("Szukaj po numerze lub opisie")
-    selected_change_directions = st.multiselect(
-        "Kierunek zmiany",
-        options=["Increase", "Decrease", "No Change"],
-        default=["Increase", "Decrease", "No Change"],
-        format_func=get_change_label,
-    )
-    only_alerts = st.checkbox(f"Tylko alerty >= {THRESHOLD}%")
-
-    return {
-        "date_basis": date_basis,
-        "selected_start_date": selected_start_date,
-        "selected_end_date": selected_end_date,
-        "selected_products": selected_products,
-        "search_term": search_term,
-        "selected_change_directions": selected_change_directions,
-        "only_alerts": only_alerts,
-        "full_product_summary": full_product_summary,
-    }
 
 
 def render_filter_panel_shell(
@@ -1491,26 +2341,34 @@ def render_filter_panel_shell(
 
 
 def render_filter_controls(result):
-    st.markdown("### Filtry")
-    date_basis = st.radio(
-        "Os dat",
-        DATE_OPTIONS,
-        index=0,
-        format_func=get_date_label,
+    render_section_header(
+        "Filtry",
+        "Zakres i oś analizy",
+        "Utrzymuj ten sam kontekst pracy podczas przeglądania wszystkich zakładek raportu.",
     )
+    date_basis = st.segmented_control(
+        "Oś dat",
+        DATE_OPTIONS,
+        selection_mode="single",
+        default=DATE_OPTIONS[0],
+        required=True,
+        key="analysis_date_basis",
+        format_func=get_date_label,
+        width="stretch",
+    )
+    date_basis = date_basis or DATE_OPTIONS[0]
 
     available_dates = result[date_basis].dropna().sort_values()
     min_date = available_dates.min().date()
     max_date = available_dates.max().date()
 
-    st.markdown("---")
-    st.markdown("##### Zakres czasowy")
+    st.markdown("###### Zakres czasowy")
     selected_date_input = st.date_input(
-        "Wybierz przedzial dat:",
+        "Wybierz przedział dat:",
         value=(min_date, max_date),
         min_value=min_date,
         max_value=max_date,
-        help="Kliknij, aby wybrac pojedynczy dzien lub zakres dat do analizy.",
+        help="Kliknij, aby wybrać pojedynczy dzień lub zakres dat do analizy.",
         label_visibility="collapsed",
     )
     selected_start_date, selected_end_date = normalize_date_selection(
@@ -1519,27 +2377,32 @@ def render_filter_controls(result):
     swapped_dates = selected_start_date > selected_end_date
     if swapped_dates:
         selected_start_date, selected_end_date = selected_end_date, selected_start_date
-        st.warning("Zamieniono kolejnosc dat, aby zachowac poprawny zakres analizy.")
+        st.warning("Zamieniono kolejność dat, aby zachować poprawny zakres analizy.")
 
     st.caption(
-        f"Zakres: {selected_start_date.strftime('%Y-%m-%d')} -> {selected_end_date.strftime('%Y-%m-%d')}"
+        f"Zakres aktywnej analizy: {selected_start_date.strftime('%Y-%m-%d')} — {selected_end_date.strftime('%Y-%m-%d')}"
     )
-    st.markdown("---")
 
     full_product_summary = summarize_products(result)
     all_products = full_product_summary["Product Label"].tolist()
+    st.markdown("###### Zakres produktów")
     selected_products = st.multiselect(
         "Produkty",
         options=all_products,
         default=all_products,
     )
     search_term = st.text_input("Szukaj po numerze lub opisie")
-    selected_change_directions = st.multiselect(
+    st.markdown("###### Kierunek zmiany")
+    selected_change_directions = st.segmented_control(
         "Kierunek zmiany",
         options=["Increase", "Decrease", "No Change"],
+        selection_mode="multi",
         default=["Increase", "Decrease", "No Change"],
+        key="analysis_change_direction",
         format_func=get_change_label,
+        width="stretch",
     )
+    selected_change_directions = selected_change_directions or ["Increase", "Decrease", "No Change"]
     only_alerts = st.checkbox(f"Tylko alerty >= {THRESHOLD}%")
 
     return {
@@ -1566,36 +2429,25 @@ def render_welcome_side_panel(prev_file, current_file):
         kicker="Workspace",
         title="Panel aplikacji",
         copy=(
-            "Po dodaniu dwoch plikow w tym miejscu pojawi sie stale widoczny panel filtrow, "
-            "kalendarz i kontrolki pracy z analiza."
+            "Upload, status plikow i pozniejszy panel filtrow pozostaja w jednej stalej kolumnie roboczej."
         ),
     )
-    render_sidebar_user(st)
     render_side_panel_brand(brand_context)
-    if prev_file is not None or current_file is not None:
-        st.caption(brand_context.get("format_copy", ""))
-    st.markdown('<hr class="side-panel-divider" />', unsafe_allow_html=True)
-    st.markdown("##### Status plikow")
-    st.caption(
-        "Poprzedni plik: "
-        + (prev_file.name if prev_file is not None else "oczekiwanie na upload")
-    )
-    st.caption(
-        "Aktualny plik: "
-        + (current_file.name if current_file is not None else "oczekiwanie na upload")
-    )
+    render_file_slot_cards(prev_file=prev_file, current_file=current_file)
     st.info(
-        "Po zaladowaniu obu plikow panel po lewej stronie zostanie uzupelniony o filtry, "
-        "zakres dat i pozostale kontrolki analizy."
+        "Po zaladowaniu obu plikow ten panel zostanie uzupelniony o filtry, status formatu i akcje eksportu."
     )
 
 
-def render_analysis_side_panel(result, brand_context):
-    render_filter_panel_shell()
-    render_sidebar_user(st)
+def render_analysis_side_panel(result, brand_context, prev_meta=None, curr_meta=None):
+    render_filter_panel_shell(
+        kicker="Analysis Controls",
+        title="Filtry i status analizy",
+        copy="Lewa kolumna utrzymuje upload, status plikow, filtry oraz eksport w jednym miejscu pracy.",
+    )
     render_side_panel_brand(brand_context)
     st.caption(brand_context.get("format_copy", ""))
-    st.markdown('<hr class="side-panel-divider" />', unsafe_allow_html=True)
+    render_file_slot_cards(prev_meta=prev_meta, curr_meta=curr_meta)
     return render_filter_controls(result)
 
 
@@ -1610,10 +2462,10 @@ def render_analysis_main(
     date_basis,
     selected_start_date,
     selected_end_date,
+    excel_bytes=None,
+    csv_bytes=None,
 ):
     brand_context = detect_brand_context(prev_meta, curr_meta)
-
-    st.success("Analiza porownawcza jest gotowa.")
     render_compact_header(
         brand_context,
         prev_meta,
@@ -1622,56 +2474,6 @@ def render_analysis_main(
         selected_start_date,
         selected_end_date,
     )
-
-    header_left, header_right = st.columns([1.5, 1], gap="large")
-    with header_left:
-        render_meta_card(
-            "Kontekst release'u",
-            [
-                f"<strong>Numer PO:</strong> {curr_meta['po_number']}",
-                f"<strong>Poprzedni release:</strong> {format_release_summary(prev_meta)}",
-                f"<strong>Aktualny release:</strong> {format_release_summary(curr_meta)}",
-            ],
-        )
-    with header_right:
-        render_meta_card(
-            "Planista",
-            [
-                f"<strong>Planista:</strong> {curr_meta['planner_name']}",
-                f"<strong>Email:</strong> {curr_meta['planner_email']}",
-                f"<strong>Produkty w zakresie:</strong> {product_summary['Part Number'].nunique()}",
-            ],
-        )
-
-    if filtered_df.empty:
-        st.warning(
-            "Po zastosowaniu filtrow nie ma danych do pokazania. "
-            "Poszerz zakres dat albo przywroc produkty w panelu filtrow."
-        )
-        return
-
-    total_prev = filtered_df["Quantity_Prev"].sum()
-    total_curr = filtered_df["Quantity_Curr"].sum()
-    total_delta = filtered_df["Delta"].sum()
-    alert_count = int(filtered_df["Alert"].sum())
-    products_changed = int((product_summary["Delta"] != 0).sum())
-
-    render_status_pills(total_delta, alert_count, products_changed)
-    metric_cols = st.columns(5)
-    metric_cols[0].metric("Poprzednia ilosc", f"{total_prev:,.0f}")
-    metric_cols[1].metric(
-        "Aktualna ilosc",
-        f"{total_curr:,.0f}",
-        delta=f"{total_curr - total_prev:+,.0f}",
-    )
-    metric_cols[2].metric("Bilans zmian", f"{total_delta:+,.0f}")
-    metric_cols[3].metric(
-        "Liczba alertow",
-        f"{alert_count:,}",
-        delta=f"{(alert_count / len(filtered_df)):.1%}",
-        delta_color="inverse",
-    )
-    metric_cols[4].metric("Zmienne produkty", f"{products_changed:,}")
 
     reference_week = get_last_completed_reference_week(selected_end_date)
     reference_row, previous_week_row = get_reference_week_rows(weekly_summary)
@@ -1711,67 +2513,90 @@ def render_analysis_main(
         previous_week_row["Week Label"] if previous_week_row is not None else "brak"
     )
 
-    st.caption(
-        f"Analiza tygodniowa odnosi sie do {reference_week_label} ({reference_range_label}). "
-        f"Data referencyjna: {selected_end_date:%Y-%m-%d}. "
-        + (
-            "Poniewaz data koncowa wypada w trakcie tygodnia, jako referencje przyjeto ostatni pelny zakonczony tydzien ISO."
-            if selected_end_date.weekday() != 6
-            else "Poniewaz data koncowa wypada w niedziele, ten tydzien zostal uznany za pelny zakonczony tydzien ISO."
+    report_metadata = [
+        {"label": "Klient", "value": brand_context.get("label", "n/a")},
+        {"label": "Format", "value": describe_format_context(prev_meta, curr_meta)},
+        {"label": "Numer PO", "value": curr_meta.get("po_number", "n/a")},
+        {"label": "Planista", "value": curr_meta.get("planner_name", "n/a")},
+        {"label": "E-mail", "value": curr_meta.get("planner_email", "n/a")},
+        {"label": "Oś analizy", "value": get_date_label(date_basis)},
+        {
+            "label": "Zakres analizy",
+            "value": f"{selected_start_date:%Y-%m-%d} — {selected_end_date:%Y-%m-%d}",
+        },
+        {"label": "Referencyjny tydzień", "value": reference_week_label},
+        {"label": "Poprzedni release", "value": format_release_summary(prev_meta)},
+        {"label": "Aktualny release", "value": format_release_summary(curr_meta)},
+    ]
+    render_report_metadata(report_metadata)
+
+    if filtered_df.empty:
+        st.warning(
+            "Po zastosowaniu filtrów nie ma danych do pokazania. Poszerz zakres dat albo przywróć produkty w panelu po lewej stronie."
         )
-    )
+        return
 
-    weekly_metric_cols = st.columns(5)
-    weekly_metric_cols[0].metric(
-        "Referencyjny tydzien ISO",
-        reference_week_label,
-        delta=reference_range_label,
+    render_section_header(
+        "KPI",
+        "Najważniejsze wskaźniki",
+        "Karty poniżej pokazują główne liczby do szybkiego odczytu bez przeskakiwania między zakładkami.",
     )
-    weekly_metric_cols[1].metric(
-        "Aktualny wolumen tygodnia",
-        f"{float(reference_row['Quantity_Curr']):,.0f}" if reference_row is not None else "0",
-        delta=reference_release_delta,
-    )
-    weekly_metric_cols[2].metric(
-        "Zmiana vs poprzedni release",
-        reference_release_pct,
-        delta=f"prev {float(reference_row['Quantity_Prev']):,.0f}" if reference_row is not None else "prev 0",
-    )
-    weekly_metric_cols[3].metric(
-        "Zmiana WoW",
-        reference_wow_delta,
-        delta=f"{reference_wow_pct} vs {previous_week_label}",
-    )
-    weekly_metric_cols[4].metric(
-        "Dni robocze PL",
-        f"{reference_working_days}",
-        delta=reference_per_day,
-    )
+    render_kpi_cards(build_kpi_metrics(filtered_df, product_summary))
 
-    st.markdown(
-        """
-        <div class="section-banner">
-            <div class="section-kicker">Executive Summary</div>
-            <div class="section-copy">
-                Najwazniejsze sygnaly, ktore warto sprawdzic w pierwszej kolejnosci.
-                Duzy naglowek pokazuje nazwe produktu, a krotki opis pod spodem wyjasnia znaczenie zmiany.
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
+    render_section_header(
+        "Alerts & Insights",
+        "Priorytety do sprawdzenia",
+        "Najważniejsze sygnały, które warto zweryfikować w pierwszej kolejności.",
     )
-    st.subheader("Kluczowe wnioski")
-    finding_cols = st.columns(max(1, min(len(key_findings), 4)), gap="large")
-    for idx, finding in enumerate(key_findings):
-        with finding_cols[idx]:
-            render_finding_card(finding["label"], finding["title"], finding["copy"])
+    render_alerts(build_alert_items(filtered_df, key_findings))
+
+    render_section_header(
+        "Reference Week",
+        "Szybki odczyt tygodniowy",
+        (
+            f"Analiza tygodniowa odnosi się do {reference_week_label} ({reference_range_label}). "
+            f"Data referencyjna: {selected_end_date:%Y-%m-%d}."
+        ),
+    )
+    render_kpi_cards(
+        [
+            {
+                "label": "Wolumen tygodnia",
+                "value": f"{float(reference_row['Quantity_Curr']):,.0f}" if reference_row is not None else "0",
+                "copy": f"Bilans release: {reference_release_delta}",
+                "tone": "neutral",
+            },
+            {
+                "label": "Zmiana vs poprzedni release",
+                "value": reference_release_pct,
+                "copy": f"Poprzedni wolumen: {float(reference_row['Quantity_Prev']):,.0f}" if reference_row is not None else "Poprzedni wolumen: 0",
+                "tone": "neutral",
+            },
+            {
+                "label": "Zmiana WoW",
+                "value": reference_wow_delta,
+                "copy": f"{reference_wow_pct} względem {previous_week_label}",
+                "tone": "neutral",
+            },
+            {
+                "label": "Dni robocze PL",
+                "value": f"{reference_working_days}",
+                "copy": reference_per_day,
+                "tone": "neutral",
+            },
+        ]
+    )
 
     dashboard_tab, weekly_tab, product_tab, matrix_tab, detail_tab = st.tabs(
         ["Dashboard", "Analiza tygodniowa", "Raport produktu", "Macierz release'u", "Dane szczegolowe"]
     )
 
     with dashboard_tab:
-        st.subheader(f"Trend zmian wedlug osi: {get_date_label(date_basis)}")
+        render_section_header(
+            "Dashboard",
+            f"Trend zmian według osi: {get_date_label(date_basis)}",
+            "Widok główny zbiera najważniejsze wykresy, strukturę zmian oraz szybki podgląd produktów z największym ruchem.",
+        )
         render_chart_table_switch(
             "dashboard_trend",
             build_quantity_chart(date_summary, get_date_label(date_basis)),
@@ -1863,7 +2688,11 @@ def render_analysis_main(
         )
 
     with weekly_tab:
-        st.subheader("Analiza tygodniowa oparta na datach")
+        render_section_header(
+            "Weekly View",
+            "Analiza tygodniowa oparta na datach",
+            "Ten widok agreguje dzienne dane do poziomu tygodni ISO i ułatwia porównanie release-over-release oraz week-over-week.",
+        )
         weekly_partial = weekly_summary[
             weekly_summary["Is Partial Range"] | ~weekly_summary["Is Closed Week"]
         ]
@@ -1957,7 +2786,11 @@ def render_analysis_main(
         st.dataframe(weekly_table, use_container_width=True, height=420)
 
     with product_tab:
-        st.subheader("Analiza wybranego produktu")
+        render_section_header(
+            "Product Drilldown",
+            "Analiza wybranego produktu",
+            "Skup się na jednym materiale i prześledź jego ruch po dniach oraz tygodniach bez utraty kontekstu filtrowania.",
+        )
         selected_product_label = st.selectbox(
             "Wybierz produkt",
             options=product_summary["Product Label"].tolist(),
@@ -2045,13 +2878,21 @@ def render_analysis_main(
         st.dataframe(product_table, use_container_width=True, height=360)
 
     with matrix_tab:
-        st.subheader("Macierz podobna do arkusza release'u")
-        matrix_metric = st.radio(
+        render_section_header(
+            "Release Matrix",
+            "Macierz podobna do arkusza release'u",
+            "Macierz zachowuje układ bliski pracy w Excelu, ale pozostaje spójna wizualnie z całym dashboardem.",
+        )
+        matrix_metric = st.segmented_control(
             "Metryka",
             options=["Current Quantity", "Previous Quantity", "Delta", "Percent Change"],
-            horizontal=True,
+            selection_mode="single",
+            default="Current Quantity",
+            required=True,
             format_func=get_metric_label,
+            width="stretch",
         )
+        matrix_metric = matrix_metric or "Current Quantity"
         matrix = build_matrix(filtered_df, date_basis, matrix_metric)
         matrix_cells = matrix.shape[0] * max(matrix.shape[1], 1)
 
@@ -2070,45 +2911,17 @@ def render_analysis_main(
             st.dataframe(matrix, use_container_width=True, height=520)
 
     with detail_tab:
-        st.subheader("Dane szczegolowe")
+        render_section_header(
+            "Detailed Data",
+            "Dane szczegolowe",
+            "Pełny podgląd przefiltrowanych wierszy do szybkiej walidacji oraz eksportu do dalszej pracy operacyjnej.",
+        )
         preview_limit = st.selectbox(
             "Liczba wierszy w podgladzie",
             options=[100, 250, 500, 1000],
             index=2,
         )
-        detail_table = filtered_df[available_detail_columns(filtered_df)].copy()
-        detail_table["Ship Date"] = detail_table["Ship Date"].dt.strftime("%Y-%m-%d")
-        detail_table["Receipt Date"] = detail_table["Receipt Date"].dt.strftime("%Y-%m-%d")
-        detail_table["Change Direction"] = detail_table["Change Direction"].map(
-            get_change_label
-        )
-        detail_table["Alert"] = detail_table["Alert"].map(
-            lambda value: "Tak" if value else "Nie"
-        )
-        detail_table = detail_table.rename(
-            columns={
-                "PO Number": "Numer PO",
-                "Origin Doc": "Origin Doc",
-                "Item": "Pozycja",
-                "Ship To": "Ship-to",
-                "Part Number": "Numer czesci",
-                "Part Description": "Opis produktu",
-                "Customer Material": "Material klienta",
-                "Unrestricted Qty": "Ilosc unrestr.",
-                "Unloading Point": "Punkt rozladunku",
-                "Ship Date": "Data wysylki",
-                "Receipt Date": "Data odbioru",
-                "Unit of Measure": "JM",
-                "CumQty": "CumQty",
-                "Quantity_Prev": "Poprzednia ilosc",
-                "Quantity_Curr": "Aktualna ilosc",
-                "Delta": "Zmiana ilosci",
-                "Percent Change": "Zmiana %",
-                "Demand Status": "Status popytu",
-                "Change Direction": "Kierunek zmiany",
-                "Alert": "Alert",
-            }
-        )
+        detail_table = build_detail_export_table(filtered_df)
 
         if len(detail_table) > preview_limit:
             st.info(
@@ -2121,22 +2934,24 @@ def render_analysis_main(
             height=420,
         )
 
-        current_matrix_for_export = build_matrix(filtered_df, date_basis, "Current Quantity")
-        delta_matrix_for_export = build_matrix(filtered_df, date_basis, "Delta")
-        excel_bytes = to_excel_bytes(
-            filtered_df,
-            weekly_summary,
-            current_matrix_for_export,
-            delta_matrix_for_export,
-            prev_meta,
-            curr_meta,
-            product_summary,
-            date_basis,
-            selected_start_date,
-            selected_end_date,
-            key_findings,
-        )
-        csv_bytes = detail_table.to_csv(index=False).encode("utf-8")
+        if excel_bytes is None:
+            current_matrix_for_export = build_matrix(filtered_df, date_basis, "Current Quantity")
+            delta_matrix_for_export = build_matrix(filtered_df, date_basis, "Delta")
+            excel_bytes = to_excel_bytes(
+                filtered_df,
+                weekly_summary,
+                current_matrix_for_export,
+                delta_matrix_for_export,
+                prev_meta,
+                curr_meta,
+                product_summary,
+                date_basis,
+                selected_start_date,
+                selected_end_date,
+                key_findings,
+            )
+        if csv_bytes is None:
+            csv_bytes = detail_table.to_csv(index=False).encode("utf-8")
 
         download_left, download_right = st.columns(2)
         with download_left:
@@ -3293,6 +4108,127 @@ init_auth_state()
 if not st.session_state["authenticated"]:
     render_login_screen()
     st.stop()
+
+app_sidebar, app_main = st.columns([0.27, 0.73], gap="large")
+
+with app_sidebar:
+    render_sidebar_user(st)
+    prev_file, current_file = render_upload_section()
+
+if prev_file is None or current_file is None:
+    with app_sidebar:
+        render_welcome_side_panel(prev_file, current_file)
+    with app_main:
+        render_welcome_state(prev_file, current_file)
+    st.stop()
+
+try:
+    prev_df, prev_meta = load_release(prev_file.getvalue(), prev_file.name)
+    curr_df, curr_meta = load_release(current_file.getvalue(), current_file.name)
+    result = compare_releases(prev_df, curr_df)
+except Exception as exc:
+    with app_sidebar:
+        render_welcome_side_panel(prev_file, current_file)
+    with app_main:
+        render_welcome_state(prev_file, current_file)
+        st.error(f"Błąd wczytywania plików: {exc}")
+    st.stop()
+
+brand_context = detect_brand_context(prev_meta, curr_meta)
+with app_sidebar:
+    filter_state = render_analysis_side_panel(
+        result,
+        brand_context,
+        prev_meta=prev_meta,
+        curr_meta=curr_meta,
+    )
+
+date_basis = filter_state["date_basis"]
+selected_start_date = filter_state["selected_start_date"]
+selected_end_date = filter_state["selected_end_date"]
+selected_products = filter_state["selected_products"]
+search_term = filter_state["search_term"]
+selected_change_directions = filter_state["selected_change_directions"]
+only_alerts = filter_state["only_alerts"]
+
+filtered_df = result.copy()
+filtered_df = filtered_df[
+    filtered_df[date_basis].dt.date.between(
+        selected_start_date, selected_end_date
+    )
+]
+
+if selected_products:
+    filtered_df = filtered_df[filtered_df["Product Label"].isin(selected_products)]
+else:
+    filtered_df = filtered_df.iloc[0:0]
+
+if search_term.strip():
+    query = search_term.strip().lower()
+    filtered_df = filtered_df[
+        filtered_df["Part Number"].str.lower().str.contains(query, na=False)
+        | filtered_df["Part Description"].str.lower().str.contains(query, na=False)
+    ]
+
+filtered_df = filtered_df[
+    filtered_df["Change Direction"].isin(selected_change_directions)
+]
+
+if only_alerts:
+    filtered_df = filtered_df[filtered_df["Alert"]]
+
+product_summary = summarize_products(filtered_df)
+date_summary = summarize_dates(filtered_df, date_basis)
+weekly_summary = build_weekly_summary(
+    filtered_df,
+    date_basis,
+    selected_start_date,
+    selected_end_date,
+    selected_end_date,
+    THRESHOLD,
+)
+key_findings = build_key_findings(
+    filtered_df, product_summary, date_summary, date_basis
+)
+
+detail_export_table = build_detail_export_table(filtered_df)
+csv_bytes = detail_export_table.to_csv(index=False).encode("utf-8")
+current_matrix_for_export = build_matrix(filtered_df, date_basis, "Current Quantity")
+delta_matrix_for_export = build_matrix(filtered_df, date_basis, "Delta")
+excel_bytes = to_excel_bytes(
+    filtered_df,
+    weekly_summary,
+    current_matrix_for_export,
+    delta_matrix_for_export,
+    prev_meta,
+    curr_meta,
+    product_summary,
+    date_basis,
+    selected_start_date,
+    selected_end_date,
+    key_findings,
+)
+
+with app_sidebar:
+    render_export_actions(csv_bytes, excel_bytes)
+
+with app_main:
+    render_analysis_main(
+        filtered_df,
+        product_summary,
+        date_summary,
+        weekly_summary,
+        key_findings,
+        prev_meta,
+        curr_meta,
+        date_basis,
+        selected_start_date,
+        selected_end_date,
+        excel_bytes=excel_bytes,
+        csv_bytes=csv_bytes,
+    )
+
+st.stop()
 
 app_sidebar, app_main = st.columns([0.28, 0.72], gap="large")
 
