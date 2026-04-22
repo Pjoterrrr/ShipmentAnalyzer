@@ -2060,7 +2060,7 @@ def render_chart_table_switch(
         default=st.session_state[state_key],
         required=True,
         key=state_key,
-        label_visibility="collapsed",
+        label_visibility="visible",
         format_func=get_view_mode_label,
         width="stretch",
     )
@@ -2629,7 +2629,7 @@ def render_upload_section():
         "Upload Previous Release",
         type=["xlsx"],
         key="previous_release_upload",
-        label_visibility="collapsed",
+        label_visibility="visible",
     )
     render_upload_card(
         "Aktualny",
@@ -2640,7 +2640,7 @@ def render_upload_section():
         "Upload Current Release",
         type=["xlsx"],
         key="current_release_upload",
-        label_visibility="collapsed",
+        label_visibility="visible",
     )
     return prev_file, current_file
 
@@ -2719,7 +2719,7 @@ def render_module_navigation(auth_user=None):
         options=allowed_modules,
         index=allowed_modules.index(st.session_state.get("active_module", allowed_modules[0])),
         key="active_module",
-        label_visibility="collapsed",
+        label_visibility="visible",
         format_func=lambda value: MODULE_LABELS.get(value, value),
     )
     return selected_module or allowed_modules[0]
@@ -3597,7 +3597,7 @@ def render_filter_controls(result):
         min_value=min_date,
         max_value=max_date,
         help="Kliknij, aby wybrać pojedynczy dzień lub zakres dat do analizy.",
-        label_visibility="collapsed",
+        label_visibility="visible",
     )
     selected_start_date, selected_end_date = normalize_date_selection(
         selected_date_input, min_date, max_date
@@ -6061,7 +6061,7 @@ def render_workspace_upload_panel():
             "Upload Previous Release",
             type=["xlsx"],
             key=get_upload_widget_key("previous"),
-            label_visibility="collapsed",
+            label_visibility="visible",
         )
         if previous_upload is not None:
             store_uploaded_release("previous", previous_upload)
@@ -6081,7 +6081,7 @@ def render_workspace_upload_panel():
             "Upload Current Release",
             type=["xlsx"],
             key=get_upload_widget_key("current"),
-            label_visibility="collapsed",
+            label_visibility="visible",
         )
         if current_upload is not None:
             store_uploaded_release("current", current_upload)
@@ -6334,7 +6334,7 @@ def render_sidebar_upload_controls():
         "Upload Previous Release",
         type=["xlsx"],
         key=get_upload_widget_key("previous"),
-        label_visibility="collapsed",
+        label_visibility="visible",
     )
     if previous_upload is not None:
         store_uploaded_release("previous", previous_upload)
@@ -6354,7 +6354,7 @@ def render_sidebar_upload_controls():
         "Upload Current Release",
         type=["xlsx"],
         key=get_upload_widget_key("current"),
-        label_visibility="collapsed",
+        label_visibility="visible",
     )
     if current_upload is not None:
         store_uploaded_release("current", current_upload)
@@ -6753,7 +6753,7 @@ with app_main:
             "Upload Previous Release",
             type=["xlsx"],
             key="previous_release_upload",
-            label_visibility="collapsed",
+            label_visibility="visible",
         )
     with upload_right:
         render_upload_card(
@@ -6765,7 +6765,7 @@ with app_main:
             "Upload Current Release",
             type=["xlsx"],
             key="current_release_upload",
-            label_visibility="collapsed",
+            label_visibility="visible",
         )
 
 if prev_file is None and current_file is None:
@@ -6907,7 +6907,7 @@ with upload_left:
         "Upload Previous Release",
         type=["xlsx"],
         key="previous_release_upload",
-        label_visibility="collapsed",
+        label_visibility="visible",
     )
 with upload_right:
     render_upload_card(
@@ -6919,7 +6919,7 @@ with upload_right:
         "Upload Current Release",
         type=["xlsx"],
         key="current_release_upload",
-        label_visibility="collapsed",
+        label_visibility="visible",
     )
 
 if prev_file is None and current_file is None:
