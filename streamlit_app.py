@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import altair as alt
 import pandas as pd
 import streamlit as st
+from openpyxl.chart import BarChart, LineChart, Reference
 from analytics_calendar import (
     build_calendar_frame,
     build_weekly_summary,
@@ -25,6 +26,8 @@ from modules.dashboard import render as render_dashboard_module
 from modules.details import render as render_details_module
 from modules.planner import render as render_planner_module
 from modules.reports import render as render_reports_module
+from modules.ui_shell import APP_TITLE, PRIMARY_TILES
+from modules import ui_shell
 from planner_helpers import (
     prepare_planner_source,
 )
@@ -35,6 +38,21 @@ from release_loader import load_release as load_release_file
 THRESHOLD = 15
 MAX_MATRIX_STYLE_CELLS = 50000
 BRAND_NAME = "Pjoter Development"
+PRIMARY_VIEW_KEYS = {"home", "dashboard", "files", "charts"}
+FILE_VIEW_OPTIONS = {
+    "overview": "Workspace",
+    "planner": "Planner",
+    "details": "Eksport i dane",
+    "admin": "Admin",
+}
+UPLOAD_STATE_KEYS = {
+    "previous": "uploaded_previous_release",
+    "current": "uploaded_current_release",
+}
+UPLOAD_NONCE_KEYS = {
+    "previous": "uploaded_previous_release_nonce",
+    "current": "uploaded_current_release_nonce",
+}
 BASE_DIR = Path(__file__).resolve().parent
 RUNTIME_ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else BASE_DIR
 
@@ -48,7 +66,28 @@ def resolve_runtime_path(relative_path):
         return BASE_DIR / relative_path
 
 
-LOGO_PATH = resolve_runtime_path(Path("assets") / "logo.png")
+BRAND_LOGO_OVERRIDE_PATHS = [
+    Path("assets") / "Nowe logo.png",
+    Path("assets") / "aplikacja_analityczna_logo.png",
+    Path("assets") / "aplikacja-analityczna-logo.png",
+    Path("assets") / "brand_logo.png",
+    Path("assets") / "branding_logo.png",
+    Path("assets") / "logo_app.png",
+]
+
+
+def resolve_brand_logo_path():
+    for relative_path in BRAND_LOGO_OVERRIDE_PATHS:
+        candidate = resolve_runtime_path(relative_path)
+        if candidate.exists():
+            return candidate
+    return resolve_runtime_path(Path("assets") / "logo.png")
+
+
+LOGO_PATH = resolve_brand_logo_path()
+REQUESTED_BRAND_LOGO_PRESENT = any(
+    resolve_runtime_path(relative_path).exists() for relative_path in BRAND_LOGO_OVERRIDE_PATHS
+)
 AUTH_USERS_PATH = resolve_runtime_path(Path("config") / "users.json")
 DATE_OPTIONS = ["Receipt Date", "Ship Date"]
 DATE_LABELS = {
@@ -861,6 +900,7 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+ui_shell.inject_styles()
 st.markdown(
     """
     <style>
@@ -1879,11 +1919,16 @@ def build_file_slot_payload(slot_label, file_obj=None, meta=None):
             "tone": "ready",
         }
     if file_obj is not None:
+        file_name = (
+            file_obj.get("name")
+            if isinstance(file_obj, dict)
+            else getattr(file_obj, "name", None)
+        )
         return {
             "slot": slot_label,
             "status": "Plik dodany",
-            "name": file_obj.name,
-            "detail": guess_file_type_label(file_obj.name),
+            "name": file_name or "n/a",
+            "detail": guess_file_type_label(file_name or ""),
             "caption": "Plik czeka na wspólne uruchomienie analizy.",
             "tone": "pending",
         }
@@ -1950,7 +1995,7 @@ def render_upload_section():
     return prev_file, current_file
 
 
-def render_export_actions(csv_bytes, excel_bytes):
+def render_export_actions(csv_bytes, excel_bytes, professional_excel_bytes=None):
     render_section_header(
         "Eksport",
         "Pobierz wyniki",
@@ -1970,6 +2015,40 @@ def render_export_actions(csv_bytes, excel_bytes):
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         use_container_width=True,
     )
+
+
+def render_extended_export_actions(csv_bytes, excel_bytes, professional_excel_bytes=None):
+    render_section_header(
+        "Eksport",
+        "Pobierz wyniki",
+        "Pobierz dane CSV, standardowy raport Excel albo nowy raport Weekly by Part.",
+    )
+    download_left, download_center, download_right = st.columns(3, gap="small")
+    with download_left:
+        st.download_button(
+            "Pobierz filtrowane dane CSV",
+            data=csv_bytes,
+            file_name="pjoter_development_release_change_filtered.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+    with download_center:
+        st.download_button(
+            "Pobierz raport Excel",
+            data=excel_bytes,
+            file_name="pjoter_development_release_change_report.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+    with download_right:
+        st.download_button(
+            "Pobierz Weekly by Part Excel",
+            data=professional_excel_bytes or b"",
+            file_name="weekly_by_part_report.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+            disabled=not professional_excel_bytes,
+        )
 
 
 def render_module_navigation(auth_user=None):
@@ -2473,7 +2552,11 @@ def render_login_screen():
     st.markdown('<div class="login-shell">', unsafe_allow_html=True)
     left_col, right_col = st.columns([1.18, 0.92], gap="large")
     with left_col:
-        logo_html = '<div class="brand-wordmark brand-wordmark--soft">Pjoter Development</div>'
+        logo_html = (
+            f'<img class="hero-logo" src="{logo_data_uri()}" alt="{APP_TITLE} logo" />'
+            if logo_available()
+            else '<div class="brand-wordmark brand-wordmark--soft">Aplikacja Analityczna</div>'
+        )
         st.markdown(
             f"""
             <div class="login-brand-card">
@@ -2555,6 +2638,69 @@ def asset_data_uri(path):
 
 def logo_data_uri():
     return asset_data_uri(LOGO_PATH)
+
+
+def init_ui_state():
+    st.session_state.setdefault("active_view", "home")
+    st.session_state.setdefault("filters_expanded", False)
+    st.session_state.setdefault("file_view", "overview")
+    for nonce_key in UPLOAD_NONCE_KEYS.values():
+        st.session_state.setdefault(nonce_key, 0)
+
+
+def set_active_view(view_name, *, close_filters=True):
+    if view_name in PRIMARY_VIEW_KEYS:
+        st.session_state["active_view"] = view_name
+    if close_filters:
+        st.session_state["filters_expanded"] = False
+
+
+def open_filters_panel():
+    st.session_state["filters_expanded"] = True
+
+
+def close_filters_panel():
+    st.session_state["filters_expanded"] = False
+
+
+def get_upload_widget_key(slot_name):
+    return f"{slot_name}_release_upload_{st.session_state.get(UPLOAD_NONCE_KEYS[slot_name], 0)}"
+
+
+def get_stored_upload(slot_name):
+    return st.session_state.get(UPLOAD_STATE_KEYS[slot_name])
+
+
+def store_uploaded_release(slot_name, uploaded_file):
+    if uploaded_file is None:
+        return get_stored_upload(slot_name)
+    payload = {
+        "name": uploaded_file.name,
+        "bytes": uploaded_file.getvalue(),
+        "size": len(uploaded_file.getvalue()),
+    }
+    st.session_state[UPLOAD_STATE_KEYS[slot_name]] = payload
+    return payload
+
+
+def clear_uploaded_release(slot_name):
+    st.session_state.pop(UPLOAD_STATE_KEYS[slot_name], None)
+    st.session_state[UPLOAD_NONCE_KEYS[slot_name]] = st.session_state.get(UPLOAD_NONCE_KEYS[slot_name], 0) + 1
+
+
+def clear_workspace_uploads():
+    clear_uploaded_release("previous")
+    clear_uploaded_release("current")
+    close_filters_panel()
+    st.session_state["file_view"] = "overview"
+
+
+def workspace_has_uploads():
+    return get_stored_upload("previous") is not None or get_stored_upload("current") is not None
+
+
+def workspace_is_ready():
+    return get_stored_upload("previous") is not None and get_stored_upload("current") is not None
 
 
 def render_sidebar_user(target=st.sidebar):
@@ -2700,10 +2846,10 @@ def apply_chart_theme(chart):
         .configure(background="transparent")
         .configure_axis(
             grid=False,
-            domainColor="#334155",
-            tickColor="#64748b",
-            labelColor="#94a3b8",
-            titleColor="#e2e8f0",
+            domainColor="#c8d4e3",
+            tickColor="#94a3b8",
+            labelColor="#5b667a",
+            titleColor="#172033",
             labelFontSize=12,
             titleFontSize=13,
             tickSize=6,
@@ -2712,28 +2858,28 @@ def apply_chart_theme(chart):
         )
         .configure_axisX(
             grid=True,
-            gridColor="rgba(148, 163, 184, 0.12)",
+            gridColor="rgba(148, 163, 184, 0.18)",
             gridDash=[2, 6],
             domain=False,
-            tickColor="#64748b",
-            labelColor="#94a3b8",
+            tickColor="#94a3b8",
+            labelColor="#5b667a",
         )
         .configure_axisY(
             grid=True,
-            gridColor="rgba(148, 163, 184, 0.12)",
+            gridColor="rgba(148, 163, 184, 0.18)",
             gridDash=[2, 6],
             domain=False,
-            tickColor="#64748b",
-            labelColor="#94a3b8",
+            tickColor="#94a3b8",
+            labelColor="#5b667a",
         )
         .configure_legend(
-            labelColor="#cbd5e1",
-            titleColor="#e2e8f0",
+            labelColor="#4a5568",
+            titleColor="#172033",
             labelFontSize=12,
             titleFontSize=13,
             symbolType="circle",
         )
-        .configure_title(color="#f8fafc", fontSize=16, fontWeight="bold", anchor="start")
+        .configure_title(color="#172033", fontSize=16, fontWeight="bold", anchor="start")
     )
 
 
@@ -2997,6 +3143,7 @@ def build_module_context(
     selected_end_date,
     excel_bytes=None,
     csv_bytes=None,
+    professional_excel_bytes=None,
 ):
     auth_user = get_auth_user()
     user_role = get_user_role(auth_user=auth_user)
@@ -3017,6 +3164,7 @@ def build_module_context(
         module_access="none",
         excel_bytes=excel_bytes,
         csv_bytes=csv_bytes,
+        professional_excel_bytes=professional_excel_bytes,
         reference=build_reference_snapshot(weekly_summary, selected_end_date),
     )
 
@@ -4509,6 +4657,452 @@ def highlight_weekly_rows(worksheet, header_row=1):
             worksheet.cell(row=row, column=col).fill = row_fill
 
 
+def build_weekly_by_part_report(detail_df, date_basis):
+    columns = [
+        "Part Number",
+        "Part Description",
+        "Week Label",
+        "Week Start",
+        "Week End",
+        "Previous Release Qty",
+        "Current Release Qty",
+        "Release Delta",
+        "Release Change %",
+        "Previous Week Qty",
+    ]
+    if detail_df is None or detail_df.empty or date_basis not in detail_df.columns:
+        return pd.DataFrame(columns=columns)
+
+    report = detail_df.copy()
+    report["Analysis Date"] = pd.to_datetime(report[date_basis], errors="coerce")
+    report = report[report["Analysis Date"].notna()].copy()
+    if report.empty:
+        return pd.DataFrame(columns=columns)
+
+    iso = report["Analysis Date"].dt.isocalendar()
+    report["ISO Year"] = iso.year.astype(int)
+    report["ISO Week"] = iso.week.astype(int)
+    report["Week Label"] = report["ISO Year"].astype(str) + "-W" + report["ISO Week"].astype(str).str.zfill(2)
+    report["Week Start"] = (
+        report["Analysis Date"] - pd.to_timedelta(report["Analysis Date"].dt.weekday, unit="D")
+    ).dt.normalize()
+    report["Week End"] = report["Week Start"] + pd.Timedelta(days=6)
+
+    weekly = (
+        report.groupby(
+            ["Part Number", "Part Description", "Week Label", "Week Start", "Week End"],
+            as_index=False,
+        )
+        .agg(
+            **{
+                "Previous Release Qty": ("Quantity_Prev", "sum"),
+                "Current Release Qty": ("Quantity_Curr", "sum"),
+                "Release Delta": ("Delta", "sum"),
+            }
+        )
+        .sort_values(["Part Number", "Week Start", "Part Description"])
+        .reset_index(drop=True)
+    )
+    weekly["Previous Week Qty"] = (
+        weekly.groupby("Part Number")["Current Release Qty"].shift(1).fillna(0.0)
+    )
+
+    def _format_release_change(row):
+        previous_qty = float(row["Previous Release Qty"])
+        current_qty = float(row["Current Release Qty"])
+        if previous_qty == 0:
+            return "New" if current_qty != 0 else "0.0%"
+        percent_value = ((current_qty - previous_qty) / previous_qty) * 100
+        return f"{percent_value:+.1f}%"
+
+    weekly["Release Change %"] = weekly.apply(_format_release_change, axis=1)
+    return weekly[columns]
+
+
+def build_weekly_by_part_chart_source(weekly_by_part_df):
+    columns = [
+        "Week Label",
+        "Week Start",
+        "Previous Release Qty",
+        "Current Release Qty",
+        "Release Delta",
+        "Parts",
+    ]
+    if weekly_by_part_df is None or weekly_by_part_df.empty:
+        return pd.DataFrame(columns=columns)
+
+    source = (
+        weekly_by_part_df.groupby(["Week Label", "Week Start"], as_index=False)
+        .agg(
+            **{
+                "Previous Release Qty": ("Previous Release Qty", "sum"),
+                "Current Release Qty": ("Current Release Qty", "sum"),
+                "Release Delta": ("Release Delta", "sum"),
+                "Parts": ("Part Number", "nunique"),
+            }
+        )
+        .sort_values("Week Start")
+        .reset_index(drop=True)
+    )
+    return source[columns]
+
+
+def build_qty_matrix_report(weekly_by_part_df):
+    if weekly_by_part_df is None or weekly_by_part_df.empty:
+        return (
+            pd.DataFrame(columns=["Part Number", "Part Description"]),
+            pd.DataFrame(
+                columns=[
+                    "Week Label",
+                    "Week Start",
+                    "Week End",
+                    "Parts",
+                    "Previous Release Qty",
+                    "Current Release Qty",
+                    "Release Delta",
+                ]
+            ),
+        )
+
+    week_order = (
+        weekly_by_part_df[["Week Label", "Week Start", "Week End"]]
+        .drop_duplicates()
+        .sort_values("Week Start")
+        .reset_index(drop=True)
+    )
+    ordered_weeks = week_order["Week Label"].tolist()
+
+    matrix = (
+        weekly_by_part_df.pivot_table(
+            index=["Part Number", "Part Description"],
+            columns="Week Label",
+            values="Current Release Qty",
+            aggfunc="sum",
+            fill_value=0,
+        )
+        .reindex(columns=ordered_weeks, fill_value=0)
+        .reset_index()
+    )
+
+    weekly_totals = (
+        weekly_by_part_df.groupby(["Week Label", "Week Start", "Week End"], as_index=False)
+        .agg(
+            **{
+                "Parts": ("Part Number", "nunique"),
+                "Previous Release Qty": ("Previous Release Qty", "sum"),
+                "Current Release Qty": ("Current Release Qty", "sum"),
+                "Release Delta": ("Release Delta", "sum"),
+            }
+        )
+        .sort_values("Week Start")
+        .reset_index(drop=True)
+    )
+    return matrix, weekly_totals
+
+
+def write_parameter_section(worksheet, start_row, title, items, start_col=1):
+    worksheet.cell(row=start_row, column=start_col, value=title)
+    worksheet.cell(row=start_row, column=start_col).font = Font(size=13, bold=True, color="0F172A")
+    for offset, (label, value) in enumerate(items, start=1):
+        label_cell = worksheet.cell(row=start_row + offset, column=start_col, value=label)
+        value_cell = worksheet.cell(row=start_row + offset, column=start_col + 1, value=value)
+        label_cell.font = Font(bold=True, color="334155")
+        label_cell.fill = PatternFill(fill_type="solid", fgColor="E2E8F0")
+        value_cell.font = Font(color="0F172A")
+        label_cell.alignment = value_cell.alignment = Alignment(horizontal="left", vertical="center")
+
+
+def write_dataframe_block(worksheet, dataframe, start_row, start_col=1):
+    dataframe = dataframe.copy()
+    if dataframe is None or dataframe.empty:
+        return
+
+    for col_offset, column_name in enumerate(dataframe.columns, start=0):
+        worksheet.cell(row=start_row, column=start_col + col_offset, value=column_name)
+
+    for row_offset, row in enumerate(dataframe.itertuples(index=False), start=1):
+        for col_offset, value in enumerate(row, start=0):
+            worksheet.cell(row=start_row + row_offset, column=start_col + col_offset, value=value)
+
+
+def style_table_region(worksheet, header_row, start_row=None, end_row=None):
+    start_row = start_row or (header_row + 1)
+    end_row = end_row or worksheet.max_row
+    thin_border = Border(
+        left=Side(style="thin", color="E2E8F0"),
+        right=Side(style="thin", color="E2E8F0"),
+        top=Side(style="thin", color="E2E8F0"),
+        bottom=Side(style="thin", color="E2E8F0"),
+    )
+    for row in worksheet.iter_rows(min_row=start_row, max_row=end_row, min_col=1, max_col=worksheet.max_column):
+        for cell in row:
+            cell.border = thin_border
+            if cell.row != header_row:
+                cell.alignment = Alignment(vertical="center", horizontal="left")
+
+
+def apply_number_formats(worksheet, header_row, format_map):
+    headers = {cell.value: cell.column for cell in worksheet[header_row]}
+    for header_name, number_format in format_map.items():
+        column_index = headers.get(header_name)
+        if column_index is None:
+            continue
+        for row in range(header_row + 1, worksheet.max_row + 1):
+            cell = worksheet.cell(row=row, column=column_index)
+            if isinstance(cell.value, (int, float)):
+                cell.number_format = number_format
+
+
+def style_multi_label_matrix_sheet(worksheet, metric_name, header_row=1, start_col=3, label_columns=(1, 2)):
+    label_fill = PatternFill(fill_type="solid", fgColor="E2E8F0")
+    label_font = Font(color="0F172A", bold=True)
+    thin_border = Border(
+        left=Side(style="thin", color="E2E8F0"),
+        right=Side(style="thin", color="E2E8F0"),
+        top=Side(style="thin", color="E2E8F0"),
+        bottom=Side(style="thin", color="E2E8F0"),
+    )
+
+    values = []
+    for row in range(header_row + 1, worksheet.max_row + 1):
+        for col in range(start_col, worksheet.max_column + 1):
+            cell_value = worksheet.cell(row=row, column=col).value
+            if isinstance(cell_value, (int, float)):
+                values.append(float(cell_value))
+
+    max_value = max(values) if values else 0
+    max_abs = max((abs(value) for value in values), default=0)
+
+    for row in range(header_row + 1, worksheet.max_row + 1):
+        for label_col in label_columns:
+            label_cell = worksheet.cell(row=row, column=label_col)
+            label_cell.fill = label_fill
+            label_cell.font = label_font
+            label_cell.border = thin_border
+        for col in range(start_col, worksheet.max_column + 1):
+            cell = worksheet.cell(row=row, column=col)
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+            if isinstance(cell.value, (int, float)):
+                bg = excel_fill_color(cell.value, metric_name, max_value, max_abs).replace("#", "")
+                cell.fill = PatternFill(fill_type="solid", fgColor=bg)
+                cell.font = Font(color="000000", bold=False)
+                cell.number_format = '#,##0'
+
+
+def add_weekly_report_chart(worksheet, chart_source_df, start_row, start_col=12):
+    if chart_source_df is None or chart_source_df.empty:
+        return
+
+    helper_col = start_col
+    headers = ["Week Label", "Previous Release Qty", "Current Release Qty", "Release Delta"]
+    for offset, header in enumerate(headers):
+        worksheet.cell(row=2, column=helper_col + offset, value=header)
+    for index, row in enumerate(chart_source_df.itertuples(index=False), start=3):
+        worksheet.cell(row=index, column=helper_col, value=row[0])
+        worksheet.cell(row=index, column=helper_col + 1, value=float(row[2]))
+        worksheet.cell(row=index, column=helper_col + 2, value=float(row[3]))
+        worksheet.cell(row=index, column=helper_col + 3, value=float(row[4]))
+
+    bar_chart = BarChart()
+    bar_chart.type = "col"
+    bar_chart.style = 10
+    bar_chart.title = "Weekly Release Trend"
+    bar_chart.y_axis.title = "Qty"
+    bar_chart.x_axis.title = "Week"
+    bar_chart.height = 8.5
+    bar_chart.width = 18
+    bar_chart.gapWidth = 55
+    data = Reference(
+        worksheet,
+        min_col=helper_col + 1,
+        max_col=helper_col + 2,
+        min_row=2,
+        max_row=2 + len(chart_source_df),
+    )
+    categories = Reference(
+        worksheet,
+        min_col=helper_col,
+        min_row=3,
+        max_row=2 + len(chart_source_df),
+    )
+    bar_chart.add_data(data, titles_from_data=True)
+    bar_chart.set_categories(categories)
+
+    line_chart = LineChart()
+    line_chart.y_axis.title = "Delta"
+    line_chart.y_axis.axId = 200
+    line_chart.height = 8.5
+    line_chart.width = 18
+    delta_data = Reference(
+        worksheet,
+        min_col=helper_col + 3,
+        max_col=helper_col + 3,
+        min_row=2,
+        max_row=2 + len(chart_source_df),
+    )
+    line_chart.add_data(delta_data, titles_from_data=True)
+    line_chart.set_categories(categories)
+    line_chart.y_axis.crosses = "max"
+
+    bar_chart += line_chart
+    worksheet.add_chart(bar_chart, f"{get_column_letter(start_col)}{start_row}")
+
+    for col in range(helper_col, helper_col + len(headers)):
+        worksheet.column_dimensions[get_column_letter(col)].hidden = True
+
+
+def write_weekly_by_part_sheet(
+    worksheet,
+    weekly_by_part_df,
+    chart_source_df,
+    prev_meta,
+    curr_meta,
+    date_basis,
+    selected_start_date,
+    selected_end_date,
+):
+    insert_logo(worksheet, "J1")
+    worksheet.merge_cells("A1:H1")
+    worksheet["A1"] = "Weekly by Part Report"
+    worksheet["A1"].font = Font(size=16, bold=True, color="0F172A")
+    worksheet["A1"].alignment = Alignment(horizontal="left", vertical="center")
+
+    parameter_items = [
+        ("Date Basis", get_date_label(date_basis)),
+        ("Selected Period", f"{selected_start_date:%Y-%m-%d} to {selected_end_date:%Y-%m-%d}"),
+        ("PO Number", curr_meta.get("po_number", "n/a")),
+        ("Previous Release", format_release_summary(prev_meta)),
+        ("Current Release", format_release_summary(curr_meta)),
+        ("Planner", curr_meta.get("planner_name", "n/a")),
+    ]
+    write_parameter_section(worksheet, 3, "Parameters", parameter_items, start_col=1)
+
+    worksheet["A11"] = "Weekly by Part"
+    worksheet["A11"].font = Font(size=13, bold=True, color="0F172A")
+    table_start_row = 12
+    weekly_export = weekly_by_part_df.copy()
+    if not weekly_export.empty:
+        weekly_export["Week Start"] = pd.to_datetime(weekly_export["Week Start"]).dt.strftime("%Y-%m-%d")
+        weekly_export["Week End"] = pd.to_datetime(weekly_export["Week End"]).dt.strftime("%Y-%m-%d")
+    write_dataframe_block(worksheet, weekly_export, table_start_row, start_col=1)
+    style_excel_header(worksheet, table_start_row)
+    style_table_region(worksheet, table_start_row, start_row=table_start_row + 1)
+    decorate_delta_column(worksheet, header_row=table_start_row)
+    apply_number_formats(
+        worksheet,
+        table_start_row,
+        {
+            "Previous Release Qty": '#,##0',
+            "Current Release Qty": '#,##0',
+            "Release Delta": '+#,##0;-#,##0;0',
+            "Previous Week Qty": '#,##0',
+        },
+    )
+    autosize_worksheet(worksheet)
+    ensure_numeric_cells_black(worksheet, start_row=table_start_row + 1)
+    worksheet.freeze_panes = f"A{table_start_row + 1}"
+    add_weekly_report_chart(worksheet, chart_source_df, start_row=3, start_col=10)
+
+
+def write_qty_matrix_sheet(
+    worksheet,
+    qty_matrix_df,
+    weekly_totals_df,
+    curr_meta,
+    date_basis,
+    selected_start_date,
+    selected_end_date,
+):
+    insert_logo(worksheet, "I1")
+    worksheet.merge_cells("A1:G1")
+    worksheet["A1"] = "Qty Matrix"
+    worksheet["A1"].font = Font(size=16, bold=True, color="0F172A")
+    worksheet["A1"].alignment = Alignment(horizontal="left", vertical="center")
+
+    parameter_items = [
+        ("Date Basis", get_date_label(date_basis)),
+        ("Selected Period", f"{selected_start_date:%Y-%m-%d} to {selected_end_date:%Y-%m-%d}"),
+        ("PO Number", curr_meta.get("po_number", "n/a")),
+        ("Planner", curr_meta.get("planner_name", "n/a")),
+    ]
+    write_parameter_section(worksheet, 3, "Parameters", parameter_items, start_col=1)
+
+    worksheet["A9"] = "Weekly Aggregates"
+    worksheet["A9"].font = Font(size=13, bold=True, color="0F172A")
+    helper_start_row = 10
+    helper_export = weekly_totals_df.copy()
+    if not helper_export.empty:
+        helper_export["Week Start"] = pd.to_datetime(helper_export["Week Start"]).dt.strftime("%Y-%m-%d")
+        helper_export["Week End"] = pd.to_datetime(helper_export["Week End"]).dt.strftime("%Y-%m-%d")
+    write_dataframe_block(worksheet, helper_export, helper_start_row, start_col=1)
+    style_excel_header(worksheet, helper_start_row)
+    style_table_region(worksheet, helper_start_row, start_row=helper_start_row + 1, end_row=helper_start_row + len(helper_export))
+    apply_number_formats(
+        worksheet,
+        helper_start_row,
+        {
+            "Previous Release Qty": '#,##0',
+            "Current Release Qty": '#,##0',
+            "Release Delta": '+#,##0;-#,##0;0',
+        },
+    )
+    ensure_numeric_cells_black(worksheet, start_row=helper_start_row + 1)
+
+    matrix_start_row = helper_start_row + len(helper_export) + 4
+    worksheet.cell(row=matrix_start_row - 1, column=1, value="Weekly Matrix")
+    worksheet.cell(row=matrix_start_row - 1, column=1).font = Font(size=13, bold=True, color="0F172A")
+    write_dataframe_block(worksheet, qty_matrix_df, matrix_start_row, start_col=1)
+    style_excel_header(worksheet, matrix_start_row)
+    style_multi_label_matrix_sheet(worksheet, "Current Quantity", header_row=matrix_start_row, start_col=3, label_columns=(1, 2))
+    autosize_worksheet(worksheet)
+    ensure_numeric_cells_black(worksheet, start_row=matrix_start_row + 1)
+    worksheet.freeze_panes = f"C{matrix_start_row + 1}"
+
+
+def to_professional_weekly_report_bytes(
+    detail_df,
+    prev_meta,
+    curr_meta,
+    date_basis,
+    selected_start_date,
+    selected_end_date,
+):
+    weekly_by_part_df = build_weekly_by_part_report(detail_df, date_basis)
+    chart_source_df = build_weekly_by_part_chart_source(weekly_by_part_df)
+    qty_matrix_df, weekly_totals_df = build_qty_matrix_report(weekly_by_part_df)
+
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        pd.DataFrame().to_excel(writer, sheet_name="Weekly by Part", index=False)
+        pd.DataFrame().to_excel(writer, sheet_name="Qty Matrix", index=False)
+
+        weekly_sheet = writer.book["Weekly by Part"]
+        write_weekly_by_part_sheet(
+            weekly_sheet,
+            weekly_by_part_df,
+            chart_source_df,
+            prev_meta,
+            curr_meta,
+            date_basis,
+            selected_start_date,
+            selected_end_date,
+        )
+
+        qty_matrix_sheet = writer.book["Qty Matrix"]
+        write_qty_matrix_sheet(
+            qty_matrix_sheet,
+            qty_matrix_df,
+            weekly_totals_df,
+            curr_meta,
+            date_basis,
+            selected_start_date,
+            selected_end_date,
+        )
+
+    return output.getvalue()
+
+
 def write_summary_sheet(
     worksheet,
     prev_meta,
@@ -4756,11 +5350,496 @@ def to_excel_bytes(
     return output.getvalue()
 
 
+def render_workspace_actions():
+    auth_user = get_auth_user()
+    info_col, clear_col, logout_col = st.columns([0.72, 0.14, 0.14], gap="small")
+    with info_col:
+        display_name = auth_user.get("display_name", "User")
+        role_name = auth_user.get("role", "Viewer")
+        st.caption(f"Aktywna sesja: {display_name} | {role_name}")
+    with clear_col:
+        clear_disabled = not workspace_has_uploads()
+        if st.button("Wyczysc pliki", key="workspace_clear_files", use_container_width=True, disabled=clear_disabled):
+            clear_workspace_uploads()
+            st.rerun()
+    with logout_col:
+        if st.button("Wyloguj", key="workspace_logout_button", use_container_width=True):
+            logout_user()
+            st.rerun()
+
+
+def render_workspace_upload_panel():
+    ui_shell.render_panel_intro(
+        "Analiza plikow",
+        "Upload i status plikow",
+        "To jedyne miejsce, w ktorym dodajesz lub podmieniasz pliki. Po zaladowaniu pozostaja dostepne w pozostalych widokach.",
+    )
+    upload_left, upload_right = st.columns(2, gap="large")
+    with upload_left:
+        render_upload_card(
+            "Poprzedni",
+            "Baseline release",
+            "Plik referencyjny do porownania aktualnego stanu planu i wysylek.",
+        )
+        previous_upload = st.file_uploader(
+            "Upload Previous Release",
+            type=["xlsx"],
+            key=get_upload_widget_key("previous"),
+            label_visibility="collapsed",
+        )
+        if previous_upload is not None:
+            store_uploaded_release("previous", previous_upload)
+        if get_stored_upload("previous") is not None:
+            st.caption(f"Zaladowany plik: {get_stored_upload('previous')['name']}")
+            if st.button("Usun poprzedni plik", key="clear_previous_upload", use_container_width=True):
+                clear_uploaded_release("previous")
+                st.rerun()
+
+    with upload_right:
+        render_upload_card(
+            "Aktualny",
+            "Current release",
+            "Plik, z ktorego aplikacja liczy zmiany, alerty i aktualny wolumen.",
+        )
+        current_upload = st.file_uploader(
+            "Upload Current Release",
+            type=["xlsx"],
+            key=get_upload_widget_key("current"),
+            label_visibility="collapsed",
+        )
+        if current_upload is not None:
+            store_uploaded_release("current", current_upload)
+        if get_stored_upload("current") is not None:
+            st.caption(f"Zaladowany plik: {get_stored_upload('current')['name']}")
+            if st.button("Usun aktualny plik", key="clear_current_upload", use_container_width=True):
+                clear_uploaded_release("current")
+                st.rerun()
+
+    return get_stored_upload("previous"), get_stored_upload("current")
+
+
+def analyze_uploaded_releases():
+    previous_release = get_stored_upload("previous")
+    current_release = get_stored_upload("current")
+    if previous_release is None or current_release is None:
+        return None
+    prev_df, prev_meta = load_release(previous_release["bytes"], previous_release["name"])
+    curr_df, curr_meta = load_release(current_release["bytes"], current_release["name"])
+    result = compare_releases(prev_df, curr_df)
+    return {
+        "prev_meta": prev_meta,
+        "curr_meta": curr_meta,
+        "result": result,
+        "brand_context": detect_brand_context(prev_meta, curr_meta),
+    }
+
+
+def render_global_filter_drawer(result):
+    with st.expander("Filtry", expanded=st.session_state.get("filters_expanded", False)):
+        ui_shell.render_panel_intro(
+            "Filtry",
+            "Zakres i kontekst analizy",
+            "Filtry sa ukryte do momentu otwarcia panelu. Zmieniaja wspolny kontekst dla dashboardu, analizy plikow, plannera i wykresow.",
+        )
+        _, close_col = st.columns([0.78, 0.22], gap="small")
+        with close_col:
+            if st.button("Zwin panel", key="close_filter_drawer", use_container_width=True):
+                close_filters_panel()
+                st.rerun()
+        return render_filter_controls(result)
+
+
+def build_default_filter_state():
+    return {
+        "date_basis": DATE_OPTIONS[0],
+        "selected_start_date": None,
+        "selected_end_date": None,
+        "selected_products": [],
+        "search_term": "",
+        "selected_change_directions": ["Increase", "Decrease", "No Change"],
+        "only_alerts": False,
+        "full_product_summary": pd.DataFrame(),
+    }
+
+
+def render_view_shell(active_view, logo_markup):
+    view_copy = {
+        "dashboard": (
+            "Dashboard",
+            "Osobny widok dla KPI, alertow i kluczowych danych podsumowujacych.",
+        ),
+        "files": (
+            "Analiza plikow",
+            "Workspace uploadu, statusu plikow, plannera, eksportu oraz danych szczegolowych.",
+        ),
+        "charts": (
+            "Wykresy",
+            "Osobny widok dla raportow i wizualizacji, bez przeciazania strony glownej.",
+        ),
+    }
+    title, copy = view_copy.get(active_view, ("Aplikacja", "Workspace analityczny."))
+    ui_shell.render_workspace_shell(logo_markup, APP_TITLE, title, copy)
+    action_cols = st.columns([0.2, 0.2, 0.6], gap="small")
+    with action_cols[0]:
+        if st.button("Strona glowna", key=f"view_home_{active_view}", use_container_width=True):
+            set_active_view("home")
+            st.rerun()
+    with action_cols[1]:
+        filter_label = "Ukryj filtry" if st.session_state.get("filters_expanded", False) else "Pokaz filtry"
+        if st.button(filter_label, key=f"view_filters_{active_view}", use_container_width=True):
+            if st.session_state.get("filters_expanded", False):
+                close_filters_panel()
+            else:
+                open_filters_panel()
+            st.rerun()
+
+
+def build_workspace_context_cards(prev_meta, curr_meta, filter_state, filtered_df):
+    items = [
+        {"label": "Format", "value": describe_format_context(prev_meta, curr_meta)},
+        {"label": "Numer PO", "value": curr_meta.get("po_number", "n/a")},
+        {"label": "Planista", "value": curr_meta.get("planner_name", "n/a")},
+        {
+            "label": "Zakres",
+            "value": (
+                f"{filter_state['selected_start_date']:%Y-%m-%d} - "
+                f"{filter_state['selected_end_date']:%Y-%m-%d}"
+            ),
+        },
+        {"label": "Wiersze po filtrach", "value": f"{len(filtered_df):,}"},
+    ]
+    ui_shell.render_context_cards(items)
+
+
+def render_empty_analysis_prompt(title, copy):
+    ui_shell.render_panel_intro("Workspace", title, copy)
+    if st.button("Przejdz do Analiza plikow", key=f"empty_prompt_{title}", use_container_width=False):
+        set_active_view("files")
+        st.rerun()
+
+
+def render_module_content(module_name, module_data, ui):
+    module_renderers = {
+        "dashboard": render_dashboard_module,
+        "planner": render_planner_module,
+        "reports": render_reports_module,
+        "details": render_details_module,
+        "admin": render_admin_module,
+    }
+    module_renderer = module_renderers.get(module_name, render_dashboard_module)
+    module_renderer(module_data, ui)
+
+
+def render_file_analysis_workspace(
+    module_data,
+    ui,
+    filtered_df,
+    product_summary,
+    prev_meta,
+    curr_meta,
+    filter_state,
+    excel_bytes,
+    csv_bytes,
+    professional_excel_bytes,
+):
+    previous_release = get_stored_upload("previous")
+    current_release = get_stored_upload("current")
+    render_workspace_upload_panel()
+    render_file_slot_cards(
+        prev_file=None if prev_meta else previous_release,
+        current_file=None if curr_meta else current_release,
+        prev_meta=prev_meta,
+        curr_meta=curr_meta,
+    )
+
+    available_sections = ["overview", "planner", "details"]
+    if can_access_module("admin", auth_user=get_auth_user()):
+        available_sections.append("admin")
+    if st.session_state.get("file_view") not in available_sections:
+        st.session_state["file_view"] = available_sections[0]
+
+    selected_section = st.segmented_control(
+        "Sekcja analizy plikow",
+        options=available_sections,
+        selection_mode="single",
+        default=st.session_state.get("file_view", available_sections[0]),
+        required=True,
+        key="file_view",
+        format_func=lambda value: FILE_VIEW_OPTIONS.get(value, value),
+        width="stretch",
+    )
+    selected_section = selected_section or available_sections[0]
+
+    if not workspace_is_ready():
+        st.info("Dodaj dwa pliki Excel, aby uruchomic porownanie release'ow, planner oraz eksport.")
+        return
+
+    if selected_section == "overview":
+        ui_shell.render_panel_intro(
+            "Workspace",
+            "Status analizy i wyniki",
+            "Ten widok porzadkuje upload, status parsera, komunikaty robocze oraz glowne akcje eksportu.",
+        )
+        overview_metrics = [
+            {
+                "label": "Pliki zaladowane",
+                "value": "2 / 2",
+                "copy": describe_format_context(prev_meta, curr_meta),
+                "tone": "positive",
+            },
+            {
+                "label": "Widoczne wiersze",
+                "value": f"{len(filtered_df):,}",
+                "copy": "Wynik po aktywnych filtrach.",
+                "tone": "neutral",
+            },
+            {
+                "label": "Produkty",
+                "value": f"{product_summary['Part Number'].nunique():,}",
+                "copy": "Unikalne materialy w aktualnym zakresie.",
+                "tone": "neutral",
+            },
+            {
+                "label": "Eksport",
+                "value": "CSV + 2x Excel",
+                "copy": "Standardowy raport oraz nowy Weekly by Part sa gotowe do pobrania.",
+                "tone": "neutral",
+            },
+        ]
+        ui.render_kpi_cards(overview_metrics)
+        build_workspace_context_cards(prev_meta, curr_meta, filter_state, filtered_df)
+        if filtered_df.empty:
+            st.warning("Po aktywnych filtrach nie ma danych do pokazania w wynikach analizy plikow.")
+        else:
+            st.success("Analiza plikow jest gotowa. Mozesz przejsc do plannera, wykresow lub pobrac eksport.")
+            preview_table = build_detail_export_table(filtered_df).head(40)
+            st.dataframe(preview_table, use_container_width=True, height=360)
+        render_extended_export_actions(csv_bytes, excel_bytes, professional_excel_bytes)
+        return
+
+    if selected_section == "planner":
+        render_module_content("planner", module_data, ui)
+        return
+
+    if selected_section == "details":
+        render_module_content("details", module_data, ui)
+        return
+
+    render_module_content("admin", module_data, ui)
+
+
+def render_home_screen(logo_markup):
+    ui_shell.render_home_hero(logo_markup)
+    top_row = st.columns(2, gap="large")
+    bottom_row = st.columns(2, gap="large")
+    all_columns = list(top_row) + list(bottom_row)
+
+    for index, tile in enumerate(PRIMARY_TILES):
+        with all_columns[index]:
+            with st.container(key=f"home_tile_{tile.key}"):
+                ui_shell.render_tile_card(tile)
+                if st.button(tile.action_label, key=f"home_tile_button_{tile.key}", use_container_width=True):
+                    if tile.key == "filters":
+                        open_filters_panel()
+                    else:
+                        set_active_view(tile.key)
+                    st.rerun()
+
+
 init_auth_state()
+init_ui_state()
 
 if not st.session_state["authenticated"]:
     render_login_screen()
     st.stop()
+
+render_workspace_actions()
+
+analysis_bundle = None
+analysis_error = None
+if workspace_is_ready():
+    try:
+        analysis_bundle = analyze_uploaded_releases()
+    except Exception as exc:
+        analysis_error = exc
+
+active_view = st.session_state.get("active_view", "home")
+logo_markup = ui_shell.build_logo_markup(logo_data_uri())
+
+if active_view == "home":
+    render_home_screen(logo_markup)
+    if st.session_state.get("filters_expanded", False):
+        with st.expander("Filtry", expanded=True):
+            ui_shell.render_panel_intro(
+                "Filtry",
+                "Panel filtrow",
+                "Filtry stana sie aktywne po zaladowaniu dwoch plikow w sekcji Analiza plikow.",
+            )
+            if workspace_is_ready() and analysis_bundle is not None:
+                render_filter_controls(analysis_bundle["result"])
+            else:
+                st.info("Najpierw zaladuj poprzedni i aktualny plik w widoku Analiza plikow.")
+                if st.button("Przejdz do Analiza plikow", key="home_to_files_from_filters", use_container_width=True):
+                    set_active_view("files", close_filters=False)
+                    st.rerun()
+    st.stop()
+
+render_view_shell(active_view, logo_markup)
+
+if analysis_error is not None:
+    st.error(f"Blad wczytywania plikow: {analysis_error}")
+
+if analysis_bundle is None:
+    if active_view == "files":
+        render_file_analysis_workspace(
+            module_data=None,
+            ui=build_ui_helpers(),
+            filtered_df=pd.DataFrame(),
+            product_summary=pd.DataFrame(columns=["Part Number"]),
+            prev_meta={},
+            curr_meta={},
+            filter_state=build_default_filter_state(),
+            excel_bytes=b"",
+            csv_bytes=b"",
+            professional_excel_bytes=b"",
+        )
+    else:
+        render_empty_analysis_prompt(
+            "Workspace oczekuje na pliki",
+            "Najpierw zaladuj poprzedni i aktualny plik w sekcji Analiza plikow. Dopiero wtedy aktywuja sie dashboard, planner, wykresy i eksport.",
+        )
+    st.stop()
+
+prev_meta = analysis_bundle["prev_meta"]
+curr_meta = analysis_bundle["curr_meta"]
+result = analysis_bundle["result"]
+
+filter_state = render_global_filter_drawer(result)
+
+date_basis = filter_state["date_basis"]
+selected_start_date = filter_state["selected_start_date"]
+selected_end_date = filter_state["selected_end_date"]
+selected_products = filter_state["selected_products"]
+search_term = filter_state["search_term"]
+selected_change_directions = filter_state["selected_change_directions"]
+only_alerts = filter_state["only_alerts"]
+
+filtered_df = result.copy()
+filtered_df = filtered_df[
+    filtered_df[date_basis].dt.date.between(
+        selected_start_date, selected_end_date
+    )
+]
+
+if selected_products:
+    filtered_df = filtered_df[filtered_df["Product Label"].isin(selected_products)]
+else:
+    filtered_df = filtered_df.iloc[0:0]
+
+if search_term.strip():
+    query = search_term.strip().lower()
+    filtered_df = filtered_df[
+        filtered_df["Part Number"].str.lower().str.contains(query, na=False)
+        | filtered_df["Part Description"].str.lower().str.contains(query, na=False)
+    ]
+
+planner_source = build_planner_scope_source(
+    result,
+    selected_start_date,
+    selected_end_date,
+    selected_products,
+    search_term,
+)
+
+filtered_df = filtered_df[
+    filtered_df["Change Direction"].isin(selected_change_directions)
+]
+
+if only_alerts:
+    filtered_df = filtered_df[filtered_df["Alert"]]
+
+product_summary = summarize_products(filtered_df)
+date_summary = summarize_dates(filtered_df, date_basis)
+weekly_summary = build_weekly_summary(
+    filtered_df,
+    date_basis,
+    selected_start_date,
+    selected_end_date,
+    selected_end_date,
+    THRESHOLD,
+)
+key_findings = build_key_findings(
+    filtered_df, product_summary, date_summary, date_basis
+)
+
+detail_export_table = build_detail_export_table(filtered_df)
+csv_bytes = detail_export_table.to_csv(index=False).encode("utf-8")
+current_matrix_for_export = build_matrix(filtered_df, date_basis, "Current Quantity")
+delta_matrix_for_export = build_matrix(filtered_df, date_basis, "Delta")
+excel_bytes = to_excel_bytes(
+    filtered_df,
+    weekly_summary,
+    current_matrix_for_export,
+    delta_matrix_for_export,
+    prev_meta,
+    curr_meta,
+    product_summary,
+    date_basis,
+    selected_start_date,
+    selected_end_date,
+    key_findings,
+)
+professional_excel_bytes = to_professional_weekly_report_bytes(
+    filtered_df,
+    prev_meta,
+    curr_meta,
+    date_basis,
+    selected_start_date,
+    selected_end_date,
+)
+
+build_workspace_context_cards(prev_meta, curr_meta, filter_state, filtered_df)
+
+ui = build_ui_helpers()
+module_data = build_module_context(
+    filtered_df,
+    planner_source,
+    product_summary,
+    date_summary,
+    weekly_summary,
+    key_findings,
+    prev_meta,
+    curr_meta,
+    date_basis,
+    selected_start_date,
+    selected_end_date,
+    excel_bytes=excel_bytes,
+    csv_bytes=csv_bytes,
+    professional_excel_bytes=professional_excel_bytes,
+)
+
+if active_view == "dashboard":
+    module_data.module_access = get_module_access_level("dashboard", auth_user=get_auth_user())
+    render_module_content("dashboard", module_data, ui)
+elif active_view == "charts":
+    module_data.module_access = get_module_access_level("reports", auth_user=get_auth_user())
+    render_module_content("reports", module_data, ui)
+else:
+    module_data.module_access = get_module_access_level("planner", auth_user=get_auth_user())
+    render_file_analysis_workspace(
+        module_data,
+        ui,
+        filtered_df,
+        product_summary,
+        prev_meta,
+        curr_meta,
+        filter_state,
+        excel_bytes,
+        csv_bytes,
+        professional_excel_bytes,
+    )
+
+st.stop()
 
 app_sidebar, app_main = st.columns([0.27, 0.73], gap="large")
 

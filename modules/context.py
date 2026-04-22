@@ -20,4 +20,5 @@ class ModuleDataContext:
     module_access: str = "none"
     excel_bytes: bytes | None = None
     csv_bytes: bytes | None = None
+    professional_excel_bytes: bytes | None = None
     reference: dict = field(default_factory=dict)
