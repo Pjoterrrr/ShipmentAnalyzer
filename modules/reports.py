@@ -1,7 +1,7 @@
 import io
 
-import altair as alt
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 
@@ -13,15 +13,6 @@ REPORT_VIEWS = {
     "demand_change": "Demand Change Report",
     "top_risk": "Top Risk Parts",
 }
-
-
-def _interactive_chart(chart):
-    if chart is None:
-        return None
-    try:
-        return chart.interactive()
-    except Exception:
-        return chart
 
 
 def _make_excel_bytes(report_tables):
@@ -117,10 +108,7 @@ def _build_weekly_risk_report(weekly_summary):
         ]
     ].copy()
     report["Risk Level"] = report.apply(_classify_weekly_risk, axis=1)
-    report = report.sort_values(
-        ["Any Weekly Alert", "Week Start"],
-        ascending=[False, False],
-    ).reset_index(drop=True)
+    report = report.sort_values(["Any Weekly Alert", "Week Start"], ascending=[False, False]).reset_index(drop=True)
     return report
 
 
@@ -175,9 +163,7 @@ def _build_demand_change_report(filtered_df):
         return pd.DataFrame()
 
     normalized = filtered_df.copy()
-    normalized["Demand Status"] = (
-        normalized["Demand Status"].fillna("Unknown").astype(str).str.strip().replace("", "Unknown")
-    )
+    normalized["Demand Status"] = normalized["Demand Status"].fillna("Unknown").astype(str).str.strip().replace("", "Unknown")
     report = (
         normalized.groupby("Demand Status", as_index=False)
         .agg(
@@ -234,54 +220,61 @@ def _build_top_risk_chart(top_risk_report):
 
     chart_source = top_risk_report.head(12).copy()
     chart_source["Label"] = chart_source["Part Number"] + " | " + chart_source["Part Description"].str.slice(0, 28)
-    chart_source["Color"] = chart_source["Risk Level"].map(
-        {
-            "Critical": "#ff6b6b",
-            "Alert": "#ff9f43",
-            "Monitor": "#60a5fa",
-            "Stable": "#34d399",
-        }
-    ).fillna("#94a3b8")
+    color_map = {
+        "Critical": "#f85149",
+        "Alert": "#d29922",
+        "Monitor": "#2d81ff",
+        "Stable": "#3fb950",
+    }
+    chart_source["Color"] = chart_source["Risk Level"].map(color_map).fillna("#8b949e")
+    chart_source = chart_source.sort_values("Risk Score", ascending=True)
 
-    return (
-        alt.Chart(chart_source)
-        .mark_bar(cornerRadiusTopRight=6, cornerRadiusBottomRight=6)
-        .encode(
-            x=alt.X("Risk Score:Q", title="Risk Score"),
-            y=alt.Y("Label:N", sort="-x", title=None),
-            color=alt.Color("Color:N", scale=None, legend=None),
-            tooltip=[
-                alt.Tooltip("Part Number:N"),
-                alt.Tooltip("Part Description:N"),
-                alt.Tooltip("Alert_Count:Q", title="Alert Count"),
-                alt.Tooltip("Delta:Q", format=",.0f"),
-                alt.Tooltip("Risk Level:N"),
-            ],
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=chart_source["Risk Score"],
+            y=chart_source["Label"],
+            orientation="h",
+            marker={"color": chart_source["Color"].tolist()},
+            text=chart_source["Risk Level"],
+            textposition="outside",
+            customdata=chart_source[["Part Number", "Part Description", "Alert_Count", "Delta", "Risk Level"]].to_numpy(),
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>"
+                "%{customdata[1]}<br>"
+                "Alert Count: %{customdata[2]}<br>"
+                "Delta: %{customdata[3]:+,.0f}<br>"
+                "Risk Level: %{customdata[4]}<extra></extra>"
+            ),
+            showlegend=False,
         )
-        .properties(height=340)
     )
+    fig.update_layout(height=340, xaxis_title="Risk Score", yaxis_title=None)
+    return fig
 
 
 def _build_demand_change_chart(demand_report):
     if demand_report.empty:
         return None
 
-    return (
-        alt.Chart(demand_report)
-        .mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6, opacity=0.9)
-        .encode(
-            x=alt.X("Demand Status:N", title=None, sort="-y"),
-            y=alt.Y("Rows:Q", title="Rows"),
-            color=alt.value("#60a5fa"),
-            tooltip=[
-                alt.Tooltip("Demand Status:N"),
-                alt.Tooltip("Rows:Q"),
-                alt.Tooltip("Quantity_Curr:Q", format=",.0f"),
-                alt.Tooltip("Delta:Q", format=",.0f"),
-            ],
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=demand_report["Demand Status"],
+            y=demand_report["Rows"],
+            marker={"color": "#2d81ff"},
+            customdata=demand_report[["Quantity_Curr", "Delta"]].to_numpy(),
+            hovertemplate=(
+                "Demand Status: %{x}<br>"
+                "Rows: %{y}<br>"
+                "Quantity Curr: %{customdata[0]:,.0f}<br>"
+                "Delta: %{customdata[1]:+,.0f}<extra></extra>"
+            ),
+            showlegend=False,
         )
-        .properties(height=320)
     )
+    fig.update_layout(height=320, xaxis_title=None, yaxis_title="Rows")
+    return fig
 
 
 def _build_report_tables(data):
@@ -359,12 +352,12 @@ def render(data, ui):
         ui.render_section_header(
             "Reports",
             "Executive Report",
-            "Zbiorczy raport zarzadzczy pokazujacy skale zmian, alerty i kluczowe punkty analizy w jednym miejscu.",
+            "Zbiorczy raport zarzadczy pokazujacy skale zmian, alerty i kluczowe punkty analizy w jednym miejscu.",
         )
         executive_report = report_tables["Executive Report"]
         ui.render_chart_table_switch(
             "reports_executive_trend",
-            _interactive_chart(ui.build_quantity_chart(data.date_summary, ui.get_date_label(data.date_basis))),
+            ui.build_quantity_chart(data.date_summary, ui.get_date_label(data.date_basis)),
             data.date_summary,
             table_height=320,
         )
@@ -381,7 +374,7 @@ def render(data, ui):
         weekly_report = report_tables["Weekly Risk Report"]
         ui.render_chart_table_switch(
             "reports_weekly_risk",
-            _interactive_chart(ui.build_weekly_delta_chart(data.weekly_summary)),
+            ui.build_weekly_delta_chart(data.weekly_summary),
             _format_report_table(weekly_report),
             chart_empty_message="Brak danych tygodniowych do raportu ryzyka.",
             table_height=360,
@@ -397,10 +390,10 @@ def render(data, ui):
             "Raport produktowy porzadkujacy najwieksze wzrosty i spadki po materialach.",
         )
         product_report = report_tables["Product Change Report"]
-        increase_chart, _ = ui.build_product_bar_chart(data.product_summary, "increase")
+        product_chart = ui.build_product_waterfall_chart(data.product_summary)
         ui.render_chart_table_switch(
             "reports_product_change",
-            _interactive_chart(increase_chart),
+            product_chart,
             _format_report_table(product_report.head(30)),
             chart_empty_message="Brak danych produktowych do raportu zmian.",
             table_height=360,
@@ -430,7 +423,7 @@ def render(data, ui):
         demand_report = report_tables["Demand Change Report"]
         ui.render_chart_table_switch(
             "reports_demand_change",
-            _interactive_chart(ui.apply_chart_theme(_build_demand_change_chart(demand_report))) if not demand_report.empty else None,
+            _build_demand_change_chart(demand_report) if not demand_report.empty else None,
             _format_report_table(demand_report),
             chart_empty_message="Brak danych Demand Status do raportu.",
             table_height=320,
@@ -447,7 +440,7 @@ def render(data, ui):
     top_risk_report = report_tables["Top Risk Parts"]
     ui.render_chart_table_switch(
         "reports_top_risk",
-        _interactive_chart(ui.apply_chart_theme(_build_top_risk_chart(top_risk_report))) if not top_risk_report.empty else None,
+        _build_top_risk_chart(top_risk_report) if not top_risk_report.empty else None,
         _format_report_table(top_risk_report.head(25)),
         chart_empty_message="Brak danych do rankingu ryzyka.",
         table_height=360,
