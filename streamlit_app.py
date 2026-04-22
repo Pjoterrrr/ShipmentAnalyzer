@@ -9,6 +9,7 @@ import sys
 from types import SimpleNamespace
 import altair as alt
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 from openpyxl.chart import BarChart, LineChart, Reference
 from analytics_calendar import (
@@ -38,12 +39,62 @@ from release_loader import load_release as load_release_file
 THRESHOLD = 15
 MAX_MATRIX_STYLE_CELLS = 50000
 BRAND_NAME = "Pjoter Development"
-PRIMARY_VIEW_KEYS = {"home", "dashboard", "files", "charts"}
+PRIMARY_VIEW_KEYS = {"dashboard", "reports"}
+MAIN_VIEW_OPTIONS = ("dashboard", "reports")
 FILE_VIEW_OPTIONS = {
     "overview": "Workspace",
     "planner": "Planner",
     "details": "Eksport i dane",
     "admin": "Admin",
+}
+PLOTLY_THEME = {
+    "layout": {
+        "paper_bgcolor": "rgba(0,0,0,0)",
+        "plot_bgcolor": "rgba(0,0,0,0)",
+        "font": {"family": "Inter, system-ui, sans-serif", "color": "#f0f6fc", "size": 12},
+        "margin": {"l": 24, "r": 20, "t": 28, "b": 24},
+        "hoverlabel": {
+            "bgcolor": "#161b22",
+            "bordercolor": "rgba(255,255,255,0.10)",
+            "font": {"color": "#f0f6fc"},
+        },
+        "legend": {
+            "orientation": "h",
+            "yanchor": "bottom",
+            "y": 1.02,
+            "xanchor": "left",
+            "x": 0,
+            "font": {"color": "#8b949e"},
+        },
+        "xaxis": {
+            "showgrid": True,
+            "gridcolor": "rgba(255,255,255,0.06)",
+            "zeroline": False,
+            "linecolor": "rgba(255,255,255,0.08)",
+            "tickfont": {"color": "#8b949e"},
+            "title": {"font": {"color": "#8b949e"}},
+        },
+        "yaxis": {
+            "showgrid": True,
+            "gridcolor": "rgba(255,255,255,0.06)",
+            "zeroline": False,
+            "linecolor": "rgba(255,255,255,0.08)",
+            "tickfont": {"color": "#8b949e"},
+            "title": {"font": {"color": "#8b949e"}},
+        },
+    }
+}
+PLOTLY_CONFIG = {
+    "displaylogo": False,
+    "responsive": True,
+    "scrollZoom": False,
+    "modeBarButtonsToRemove": [
+        "lasso2d",
+        "select2d",
+        "autoScale2d",
+        "resetScale2d",
+        "toggleSpikelines",
+    ],
 }
 UPLOAD_STATE_KEYS = {
     "previous": "uploaded_previous_release",
@@ -146,7 +197,7 @@ ROLE_MODULE_PERMISSIONS = {
 st.set_page_config(
     page_title="Pjoter Development | Analiza zamówień i wysyłek",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 st.markdown(
     """
@@ -225,7 +276,6 @@ st.markdown(
         color: var(--steel) !important;
     }
 
-    section[data-testid="stSidebar"],
     [data-testid="collapsedControl"],
     [data-testid="stSidebarCollapseButton"],
     button[aria-label="Close sidebar"],
@@ -1286,6 +1336,607 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    :root {
+      --font: 'Inter', system-ui, sans-serif;
+      --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+      --bg-app: #0d1117;
+      --bg-panel: #161b22;
+      --bg-card: #1c2230;
+      --bg-hover: #212840;
+      --bg-input: #131929;
+      --border: rgba(255,255,255,0.07);
+      --border-strong: rgba(255,255,255,0.13);
+      --border-focus: #3b82f6;
+      --text-primary: #f0f6fc;
+      --text-secondary: #8b949e;
+      --text-muted: #484f58;
+      --accent-blue: #2d81ff;
+      --accent-teal: #00c4b4;
+      --accent-green: #3fb950;
+      --accent-amber: #d29922;
+      --accent-red: #f85149;
+      --accent-purple: #8957e5;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.4);
+      --shadow-md: 0 4px 16px rgba(0,0,0,0.5);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,0.6);
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --radius-xl: 22px;
+      --ease: cubic-bezier(0.4, 0, 0.2, 1);
+      --duration-fast: 120ms;
+      --duration-base: 200ms;
+    }
+
+    html, body, [class*="css"] {
+      font-family: var(--font) !important;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .stApp {
+      background:
+        radial-gradient(circle at top left, rgba(45, 129, 255, 0.10), transparent 20%),
+        radial-gradient(circle at top right, rgba(0, 196, 180, 0.07), transparent 16%),
+        linear-gradient(180deg, #0d1117 0%, #0f141d 42%, #0b1017 100%) !important;
+      color: var(--text-primary) !important;
+    }
+
+    .block-container {
+      padding-top: var(--sp-6) !important;
+      padding-bottom: var(--sp-8) !important;
+      max-width: 1600px !important;
+    }
+
+    h1, h2, h3, h4, h5, h6,
+    p strong,
+    .stMarkdown p strong {
+      color: var(--text-primary) !important;
+    }
+
+    p, label, span, div, .stCaption {
+      color: var(--text-secondary);
+    }
+
+    .stMarkdown a {
+      color: var(--accent-blue) !important;
+    }
+
+    .layout-shell {
+      display: grid;
+      grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
+      gap: var(--sp-6);
+      align-items: start;
+    }
+
+    .layout-sidebar {
+      position: sticky;
+      top: var(--sp-5);
+      display: grid;
+      gap: var(--sp-4);
+      padding: var(--sp-5);
+      background: linear-gradient(180deg, rgba(22,27,34,0.96), rgba(19,24,33,0.94));
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-lg);
+    }
+
+    .layout-main {
+      display: grid;
+      gap: var(--sp-5);
+      min-width: 0;
+    }
+
+    .nav-shell,
+    .hero-card,
+    .upload-card,
+    .quick-card,
+    .finding-card,
+    .meta-card,
+    .sidebar-user-card,
+    .report-meta-card,
+    .upload-status-card,
+    .compact-header,
+    .section-card,
+    .chart-card,
+    .app-header,
+    .empty-state-shell,
+    .filter-panel-shell,
+    .login-brand-card,
+    div[data-testid="stForm"],
+    div[data-testid="stMetric"] {
+      background: linear-gradient(180deg, rgba(28,34,48,0.96), rgba(22,27,34,0.96)) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: var(--radius-lg) !important;
+      box-shadow: var(--shadow-md) !important;
+      color: var(--text-primary) !important;
+    }
+
+    .section-card,
+    .chart-card {
+      padding: var(--sp-5);
+      animation: fadeSlideUp 360ms var(--ease);
+    }
+
+    .hero-card,
+    .upload-card,
+    .quick-card,
+    .finding-card,
+    .meta-card,
+    .report-meta-card,
+    .upload-status-card,
+    .chart-card,
+    .section-card,
+    .sidebar-user-card,
+    div[data-testid="stMetric"] {
+      transition: transform var(--duration-base) var(--ease), box-shadow var(--duration-base) var(--ease), border-color var(--duration-base) var(--ease);
+      animation: fadeSlideUp 360ms var(--ease);
+    }
+
+    .hero-card:hover,
+    .upload-card:hover,
+    .quick-card:hover,
+    .finding-card:hover,
+    .meta-card:hover,
+    .report-meta-card:hover,
+    .upload-status-card:hover,
+    .chart-card:hover,
+    .section-card:hover,
+    div[data-testid="stMetric"]:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg) !important;
+      border-color: var(--border-strong) !important;
+    }
+
+    .nav-shell {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--sp-4);
+      align-items: center;
+      padding: var(--sp-5);
+    }
+
+    .nav-shell__label,
+    .section-kicker,
+    .meta-label,
+    .report-meta-label,
+    .upload-step,
+    .sidebar-user-label,
+    .hero-kicker,
+    .filter-panel-kicker {
+      color: var(--text-secondary) !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .nav-shell__title {
+      color: var(--text-primary);
+      font-size: clamp(1.4rem, 1.2rem + 0.8vw, 2.1rem);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      margin: 4px 0 6px 0;
+    }
+
+    .nav-shell__copy,
+    .section-copy,
+    .hero-copy,
+    .upload-copy,
+    .quick-copy,
+    .finding-copy,
+    .sidebar-user-role,
+    .compact-header-copy,
+    .app-header__subtitle,
+    .empty-state-subtitle,
+    .login-copy,
+    .login-form-copy,
+    .upload-status-caption,
+    .upload-status-meta {
+      color: var(--text-secondary) !important;
+      line-height: 1.6;
+    }
+
+    .section-head {
+      margin: 0 0 var(--sp-4) 0;
+    }
+
+    .section-title,
+    .hero-title,
+    .upload-title,
+    .quick-title,
+    .finding-title,
+    .meta-value,
+    .sidebar-user-name,
+    .report-meta-value,
+    .compact-header-title,
+    .app-header__title,
+    .empty-state-title,
+    .login-title,
+    .login-form-heading {
+      color: var(--text-primary) !important;
+    }
+
+    [data-testid="stButtonGroup"],
+    [data-testid="stButtonGroup"] > div {
+      width: 100%;
+    }
+
+    [data-testid="stButtonGroup"] [data-baseweb="button-group"] {
+      width: 100%;
+      border-radius: 999px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      padding: 4px;
+    }
+
+    [data-testid="stButtonGroup"] button,
+    button[data-baseweb="tab"],
+    [data-testid="stRadio"] [role="radiogroup"] label {
+      border-radius: 999px !important;
+      border: 1px solid transparent !important;
+      background: transparent !important;
+      color: var(--text-secondary) !important;
+      transition: all var(--duration-base) var(--ease) !important;
+      min-height: 42px;
+      font-weight: 600 !important;
+      box-shadow: none !important;
+    }
+
+    [data-testid="stButtonGroup"] button:hover,
+    button[data-baseweb="tab"]:hover,
+    [data-testid="stRadio"] [role="radiogroup"] label:hover {
+      background: var(--bg-hover) !important;
+      color: var(--text-primary) !important;
+      transform: translateY(-1px);
+    }
+
+    [data-testid="stButtonGroup"] button[kind*="Active"],
+    button[data-baseweb="tab"][aria-selected="true"] {
+      background: linear-gradient(180deg, rgba(45,129,255,0.24), rgba(45,129,255,0.16)) !important;
+      border-color: rgba(59,130,246,0.45) !important;
+      color: var(--text-primary) !important;
+      font-weight: 800 !important;
+      box-shadow: 0 0 0 1px rgba(59,130,246,0.18), 0 8px 24px rgba(0,0,0,0.35) !important;
+    }
+
+    [data-testid="stRadio"] [role="radiogroup"] {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 4px;
+      border-radius: 999px;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+    }
+
+    div[data-baseweb="tab-list"] {
+      gap: var(--sp-2) !important;
+      margin-bottom: var(--sp-4) !important;
+    }
+
+    .stButton > button,
+    .stDownloadButton > button,
+    .stFormSubmitButton > button,
+    button[kind="primary"],
+    button[kind="secondary"] {
+      border-radius: var(--radius-md) !important;
+      border: 1px solid var(--border) !important;
+      background: linear-gradient(180deg, rgba(28,34,48,0.96), rgba(19,25,41,0.96)) !important;
+      color: var(--text-primary) !important;
+      box-shadow: var(--shadow-sm) !important;
+      transition: all var(--duration-base) var(--ease) !important;
+      min-height: 42px;
+      font-weight: 700 !important;
+    }
+
+    .stButton > button:hover,
+    .stDownloadButton > button:hover,
+    .stFormSubmitButton > button:hover,
+    button[kind="primary"]:hover,
+    button[kind="secondary"]:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-md) !important;
+      border-color: var(--border-strong) !important;
+    }
+
+    .stDownloadButton > button:focus,
+    .stButton > button:focus,
+    .stFormSubmitButton > button:focus {
+      border-color: var(--border-focus) !important;
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.18) !important;
+    }
+
+    .download-cta .stDownloadButton > button:active {
+      animation: pulseGlow 420ms var(--ease);
+    }
+
+    div[class*="st-key-sidebar_logout_button"] button,
+    div[class*="st-key-workspace_logout_button"] button,
+    div[class*="st-key-legacy_sidebar_logout_button"] button {
+      border-color: rgba(248,81,73,0.34) !important;
+      color: #ffb3ad !important;
+      background: linear-gradient(180deg, rgba(83,27,27,0.96), rgba(48,18,18,0.96)) !important;
+    }
+
+    div[data-baseweb="input"] > div,
+    div[data-baseweb="base-input"] > div,
+    div[data-baseweb="select"] > div,
+    .stDateInput > div > div,
+    .stMultiSelect [data-baseweb="tag"],
+    .stTextInput > div > div > input,
+    .stDateInput input,
+    .stNumberInput input,
+    .stTextArea textarea {
+      background: var(--bg-input) !important;
+      border: 1px solid var(--border) !important;
+      color: var(--text-primary) !important;
+      border-radius: var(--radius-md) !important;
+      transition: all var(--duration-base) var(--ease) !important;
+    }
+
+    div[data-baseweb="input"]:focus-within > div,
+    div[data-baseweb="base-input"]:focus-within > div,
+    div[data-baseweb="select"]:focus-within > div,
+    .stDateInput > div:focus-within > div,
+    .stMultiSelect div[data-baseweb="select"]:focus-within > div {
+      border-color: var(--border-focus) !important;
+      box-shadow: 0 0 0 3px rgba(59,130,246,0.16) !important;
+    }
+
+    section[data-testid="stSidebar"] {
+      display: block !important;
+      background: var(--bg-panel);
+      border-right: 1px solid var(--border);
+    }
+
+    section[data-testid="stSidebar"] > div {
+      background: var(--bg-panel);
+    }
+
+    section[data-testid="stSidebar"] label {
+      color: var(--text-secondary) !important;
+      font-size: 11px !important;
+      font-weight: 600 !important;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .filter-panel-shell,
+    .upload-card {
+      padding: var(--sp-4) !important;
+    }
+
+    section[data-testid="stFileUploader"] {
+      border: 1px solid var(--border) !important;
+      border-radius: var(--radius-lg) !important;
+      background: var(--bg-panel) !important;
+      box-shadow: none !important;
+      padding: var(--sp-2) !important;
+    }
+
+    div[data-testid="stFileUploaderDropzone"] {
+      border: 1px dashed rgba(255,255,255,0.12) !important;
+      border-radius: var(--radius-md) !important;
+      background: linear-gradient(180deg, rgba(19,25,41,0.96), rgba(14,19,29,0.96)) !important;
+      transition: all var(--duration-base) var(--ease) !important;
+    }
+
+    section[data-testid="stFileUploader"]:hover div[data-testid="stFileUploaderDropzone"],
+    div[data-testid="stFileUploaderDropzone"]:hover {
+      border-color: rgba(45,129,255,0.72) !important;
+      box-shadow: 0 0 0 1px rgba(45,129,255,0.32), 0 0 18px rgba(45,129,255,0.18) !important;
+    }
+
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: var(--sp-4);
+    }
+
+    .kpi-card {
+      position: relative;
+      overflow: hidden;
+      padding: var(--sp-5);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(28,34,48,0.98), rgba(18,23,34,0.98));
+      box-shadow: var(--shadow-md);
+      animation: fadeSlideUp 360ms var(--ease);
+      transition: transform var(--duration-base) var(--ease), box-shadow var(--duration-base) var(--ease), border-color var(--duration-base) var(--ease);
+    }
+
+    .kpi-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+      border-color: var(--border-strong);
+    }
+
+    .kpi-card::after {
+      content: "";
+      position: absolute;
+      inset: auto 0 0 0;
+      height: 3px;
+      background: var(--kpi-accent, var(--accent-blue));
+      opacity: 0.95;
+    }
+
+    .kpi-label {
+      color: var(--text-secondary) !important;
+      font-size: 11px !important;
+      font-weight: 700 !important;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: var(--sp-3);
+    }
+
+    .kpi-value {
+      color: var(--text-primary) !important;
+      font-size: clamp(1.75rem, 1.45rem + 0.8vw, 2.4rem);
+      line-height: 1;
+      font-weight: 800;
+      margin-bottom: var(--sp-3);
+      animation: metricPop 360ms var(--ease);
+    }
+
+    .kpi-delta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--sp-3);
+      margin-bottom: var(--sp-3);
+      color: var(--text-secondary);
+      font-size: 0.84rem;
+      font-weight: 600;
+    }
+
+    .kpi-delta-value {
+      color: var(--kpi-accent, var(--accent-blue));
+      font-weight: 700;
+    }
+
+    .kpi-progress {
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.07);
+      overflow: hidden;
+      margin-bottom: var(--sp-3);
+    }
+
+    .kpi-progress > span {
+      display: block;
+      height: 100%;
+      width: var(--delta-width, 42%);
+      background: linear-gradient(90deg, var(--kpi-accent, var(--accent-blue)), rgba(255,255,255,0.28));
+    }
+
+    .kpi-copy {
+      color: var(--text-secondary) !important;
+      font-size: 0.84rem;
+      line-height: 1.5;
+      margin-bottom: var(--sp-3);
+    }
+
+    .kpi-sparkline {
+      display: block;
+      width: 100%;
+      height: 34px;
+      opacity: 0.92;
+    }
+
+    div[data-testid="stElementContainer"]:has(> div[data-testid="stPlotlyChart"]),
+    div[data-testid="stElementContainer"]:has(> div[data-testid="stDataFrame"]) {
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+    }
+
+    div[data-testid="stPlotlyChart"],
+    div[data-testid="stDataFrame"] {
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+    }
+
+    .stDataFrame thead tr th {
+      background: #151b25 !important;
+      color: var(--text-secondary) !important;
+    }
+
+    .stDataFrame tbody tr:hover {
+      background: rgba(255,255,255,0.03) !important;
+    }
+
+    .app-header,
+    .compact-header {
+      padding: var(--sp-5);
+    }
+
+    .app-header__eyebrow,
+    .compact-header-kicker {
+      color: var(--accent-blue) !important;
+    }
+
+    .app-header__banner .file-type-banner,
+    .compact-brand-box .file-type-banner,
+    .empty-state-banner .file-type-banner {
+      background: linear-gradient(180deg, rgba(33,40,64,0.95), rgba(22,27,34,0.98)) !important;
+      border-color: var(--border) !important;
+    }
+
+    .file-type-banner__text {
+      color: var(--text-primary) !important;
+    }
+
+    .login-shell {
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    .login-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: var(--sp-5);
+      align-items: stretch;
+    }
+
+    .login-brand-card,
+    div[data-testid="stForm"] {
+      min-height: 460px;
+      padding: var(--sp-6) !important;
+    }
+
+    div[data-testid="stForm"] > form {
+      display: flex;
+      flex-direction: column;
+      gap: var(--sp-4);
+      justify-content: center;
+      height: 100%;
+    }
+
+    @keyframes fadeSlideUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes metricPop {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulseGlow {
+      0% { box-shadow: 0 0 0 rgba(45,129,255,0); }
+      50% { box-shadow: 0 0 0 5px rgba(45,129,255,0.16); }
+      100% { box-shadow: 0 0 0 rgba(45,129,255,0); }
+    }
+
+    @media (max-width: 1280px) {
+      .kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 1100px) {
+      .layout-shell { grid-template-columns: 1fr; }
+      .layout-sidebar { position: static; }
+    }
+
+    @media (max-width: 860px) {
+      .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .login-grid { grid-template-columns: 1fr; }
+      .login-brand-card, div[data-testid="stForm"] { min-height: auto; }
+    }
+
+    @media (max-width: 640px) {
+      .kpi-grid { grid-template-columns: 1fr; }
+      .nav-shell { flex-direction: column; align-items: stretch; }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 def first_non_empty(series):
     values = series.dropna().astype(str).str.strip()
     values = values[values.ne("")]
@@ -1380,6 +2031,17 @@ def format_chart_source_table(dataframe):
     return source_table
 
 
+def _is_plotly_figure(chart):
+    return isinstance(chart, go.Figure)
+
+
+def apply_plotly_theme(chart):
+    if chart is None or not _is_plotly_figure(chart):
+        return chart
+    chart.update_layout(**PLOTLY_THEME["layout"])
+    return chart
+
+
 def render_chart_table_switch(
     key,
     chart,
@@ -1407,6 +2069,13 @@ def render_chart_table_switch(
     if selected_view == "chart":
         if chart is None:
             st.info(chart_empty_message)
+        elif _is_plotly_figure(chart):
+            st.plotly_chart(
+                apply_plotly_theme(chart),
+                use_container_width=True,
+                config=PLOTLY_CONFIG,
+                key=f"{key}_plotly_chart",
+            )
         else:
             st.altair_chart(chart, use_container_width=True)
         return
@@ -1528,6 +2197,10 @@ def render_section_header(kicker, title, copy=None):
     st.markdown(markup, unsafe_allow_html=True)
 
 
+def section_header(kicker, title, copy=None):
+    render_section_header(kicker, title, copy)
+
+
 def render_app_header(brand_context, title, subtitle, meta_items=None, file_caption=""):
     meta_items = meta_items or []
     chips_html = "".join(
@@ -1603,21 +2276,154 @@ def render_report_metadata(items):
     )
 
 
+def _build_delta_width(value, reference=None):
+    magnitude = abs(float(value or 0))
+    baseline = abs(float(reference or 0))
+    if baseline <= 0:
+        baseline = magnitude if magnitude > 0 else 1.0
+    return max(12.0, min(100.0, (magnitude / baseline) * 100.0))
+
+
+def _sparkline_svg(values, stroke):
+    series = [float(value) for value in values if pd.notna(value)]
+    if len(series) < 2:
+        return ""
+    min_value = min(series)
+    max_value = max(series)
+    span = max(max_value - min_value, 1.0)
+    width = 180
+    height = 34
+    step = width / max(len(series) - 1, 1)
+    points = []
+    for index, value in enumerate(series):
+        x = round(index * step, 2)
+        y = round(height - (((value - min_value) / span) * (height - 6)) - 3, 2)
+        points.append(f"{x},{y}")
+    polyline = " ".join(points)
+    area = " ".join(points + [f"{width},{height}", f"0,{height}"])
+    return (
+        f'<svg class="kpi-sparkline" viewBox="0 0 {width} {height}" preserveAspectRatio="none">'
+        f'<polyline points="{area}" fill="{stroke}22" stroke="none"></polyline>'
+        f'<polyline points="{polyline}" fill="none" stroke="{stroke}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></polyline>'
+        "</svg>"
+    )
+
+
 def render_kpi_cards(metrics):
-    metric_cols = st.columns(len(metrics), gap="medium")
-    for index, metric in enumerate(metrics):
-        tone = html.escape(str(metric.get("tone", "neutral")))
-        with metric_cols[index]:
-            st.markdown(
-                f"""
-                <div class="kpi-card kpi-card--{tone}">
-                    <div class="kpi-label">{html.escape(str(metric.get('label', '')))}</div>
-                    <div class="kpi-value">{html.escape(str(metric.get('value', '0')))}</div>
-                    <div class="kpi-copy">{html.escape(str(metric.get('copy', '')))}</div>
+    cards_html = []
+    for metric in metrics:
+        accent = html.escape(str(metric.get("accent", "var(--accent-blue)")))
+        delta_text = html.escape(str(metric.get("delta", metric.get("copy", ""))))
+        delta_label = html.escape(str(metric.get("delta_label", "Delta")))
+        delta_width = float(metric.get("delta_width", 42.0))
+        sparkline = _sparkline_svg(metric.get("sparkline", []), accent)
+        cards_html.append(
+            """
+            <div class="kpi-card" style="--kpi-accent: {accent}; --delta-width: {delta_width:.1f}%;">
+                <div class="kpi-label">{label}</div>
+                <div class="kpi-value">{value}</div>
+                <div class="kpi-delta">
+                    <span>{delta_label}</span>
+                    <span class="kpi-delta-value">{delta_text}</span>
                 </div>
-                """,
-                unsafe_allow_html=True,
+                <div class="kpi-progress"><span></span></div>
+                <div class="kpi-copy">{copy}</div>
+                {sparkline}
+            </div>
+            """.format(
+                accent=accent,
+                delta_width=delta_width,
+                label=html.escape(str(metric.get("label", ""))),
+                value=html.escape(str(metric.get("value", "0"))),
+                delta_label=delta_label,
+                delta_text=delta_text,
+                copy=html.escape(str(metric.get("copy", ""))),
+                sparkline=sparkline,
             )
+        )
+    st.markdown(f'<div class="kpi-grid">{"".join(cards_html)}</div>', unsafe_allow_html=True)
+
+
+def render_kpi_row(metrics):
+    render_kpi_cards(metrics)
+
+
+def build_dashboard_kpi_metrics(filtered_df, product_summary, date_summary):
+    previous_qty = float(filtered_df["Quantity_Prev"].sum())
+    current_qty = float(filtered_df["Quantity_Curr"].sum())
+    balance_delta = float(filtered_df["Delta"].sum())
+    alert_count = int(filtered_df["Alert"].sum()) if "Alert" in filtered_df.columns else 0
+    changed_products = int((product_summary["Delta"] != 0).sum()) if not product_summary.empty else 0
+
+    prev_series = date_summary.sort_values("Analysis Date")["Quantity_Prev"].tail(10).tolist()
+    curr_series = date_summary.sort_values("Analysis Date")["Quantity_Curr"].tail(10).tolist()
+    delta_series = date_summary.sort_values("Analysis Date")["Delta"].tail(10).tolist()
+    alert_series = date_summary.sort_values("Analysis Date")["Alerts"].tail(10).tolist() if "Alerts" in date_summary.columns else []
+    changed_series = (
+        product_summary.assign(Abs_Delta=product_summary["Delta"].abs())
+        .sort_values("Abs_Delta", ascending=False)["Abs_Delta"]
+        .head(10)
+        .tolist()
+        if not product_summary.empty
+        else []
+    )
+
+    delta_pct = (balance_delta / previous_qty * 100.0) if previous_qty else 0.0
+    alert_ratio = (alert_count / max(len(filtered_df), 1)) * 100.0
+    changed_ratio = (changed_products / max(product_summary["Part Number"].nunique(), 1)) * 100.0 if not product_summary.empty else 0.0
+
+    return [
+        {
+            "label": "Poprzednia ilość",
+            "value": f"{previous_qty:,.0f}",
+            "delta_label": "Release",
+            "delta": "Baseline",
+            "copy": "Suma wolumenu poprzedniego release'u w aktywnym zakresie.",
+            "accent": "#8957e5",
+            "delta_width": 100,
+            "sparkline": prev_series,
+        },
+        {
+            "label": "Aktualna ilość",
+            "value": f"{current_qty:,.0f}",
+            "delta_label": "Zmiana",
+            "delta": f"{delta_pct:+.1f}%",
+            "copy": "Aktualny wolumen po zastosowaniu filtrów.",
+            "accent": "#2d81ff",
+            "delta_width": _build_delta_width(current_qty, previous_qty),
+            "sparkline": curr_series,
+        },
+        {
+            "label": "Bilans zmian",
+            "value": format_signed_int(balance_delta),
+            "delta_label": "Delta %",
+            "delta": f"{delta_pct:+.1f}%",
+            "copy": "Bilans aktualnego release'u względem poprzedniego.",
+            "accent": "#3fb950" if balance_delta >= 0 else "#f85149",
+            "delta_width": _build_delta_width(balance_delta, previous_qty),
+            "sparkline": delta_series,
+        },
+        {
+            "label": "Alerty",
+            "value": f"{alert_count:,}",
+            "delta_label": "Udział",
+            "delta": f"{alert_ratio:.1f}%",
+            "copy": f"Wiersze przekraczające próg {THRESHOLD}% w bieżącym widoku.",
+            "accent": "#d29922" if alert_count == 0 else "#f85149",
+            "delta_width": _build_delta_width(alert_ratio, 100),
+            "sparkline": alert_series,
+        },
+        {
+            "label": "Zmienne produkty",
+            "value": f"{changed_products:,}",
+            "delta_label": "Coverage",
+            "delta": f"{changed_ratio:.1f}%",
+            "copy": "Produkty ze zmianą wolumenu w analizowanym oknie.",
+            "accent": "#00c4b4",
+            "delta_width": _build_delta_width(changed_ratio, 100),
+            "sparkline": changed_series,
+        },
+    ]
 
 
 def build_kpi_metrics(filtered_df, product_summary):
@@ -2483,7 +3289,7 @@ def logo_data_uri():
 
 
 def init_ui_state():
-    st.session_state.setdefault("active_view", "home")
+    st.session_state.setdefault("active_view", "dashboard")
     st.session_state.setdefault("filters_expanded", False)
     st.session_state.setdefault("file_view", "overview")
     for nonce_key in UPLOAD_NONCE_KEYS.values():
@@ -2876,16 +3682,19 @@ def render_analysis_side_panel(result, brand_context, prev_meta=None, curr_meta=
 def build_ui_helpers():
     return SimpleNamespace(
         apply_chart_theme=apply_chart_theme,
+        apply_plotly_theme=apply_plotly_theme,
         available_detail_columns=available_detail_columns,
         build_alert_items=build_alert_items,
         build_change_mix_chart=build_change_mix_chart,
         build_change_mix_source=build_change_mix_source,
+        build_dashboard_kpi_metrics=build_dashboard_kpi_metrics,
         build_delta_chart=build_delta_chart,
         build_detail_export_table=build_detail_export_table,
         build_kpi_metrics=build_kpi_metrics,
         build_matrix=build_matrix,
         build_product_bar_chart=build_product_bar_chart,
         build_product_bar_source=build_product_bar_source,
+        build_product_waterfall_chart=build_product_waterfall_chart,
         build_product_detail_table=build_product_detail_table,
         build_quantity_chart=build_quantity_chart,
         build_weekly_delta_chart=build_weekly_delta_chart,
@@ -2901,6 +3710,7 @@ def build_ui_helpers():
         render_alerts=render_alerts,
         render_chart_table_switch=render_chart_table_switch,
         render_kpi_cards=render_kpi_cards,
+        render_kpi_row=render_kpi_row,
         render_section_header=render_section_header,
         style_matrix=style_matrix,
         summarize_dates=summarize_dates,
@@ -3756,54 +4566,66 @@ def build_weekly_quantity_chart(weekly_summary):
 
     chart_data = weekly_summary.copy()
     chart_data["Week Start"] = pd.to_datetime(chart_data["Week Start"])
-    current_area = (
-        alt.Chart(chart_data)
-        .mark_area(color="#5092ff", opacity=0.18, interpolate="monotone")
-        .encode(
-            x=alt.X("Week Start:T", title="Tydzien ISO", axis=alt.Axis(labelAngle=-24, labelLimit=120)),
-            y=alt.Y("Quantity_Curr:Q", title="Wolumen tygodniowy"),
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=chart_data["Week Start"],
+            y=chart_data["Quantity_Curr"],
+            mode="lines",
+            line={"color": "rgba(45,129,255,0.24)", "width": 0},
+            fill="tozeroy",
+            fillcolor="rgba(45,129,255,0.18)",
+            name="Aktualny release area",
+            hoverinfo="skip",
+            showlegend=False,
         )
     )
-    prev_line = (
-        alt.Chart(chart_data)
-        .mark_line(strokeWidth=2.4, interpolate="monotone", color="#7c93c9", opacity=0.9)
-        .encode(
-            x=alt.X("Week Start:T", title="Tydzien ISO", axis=alt.Axis(labelAngle=-24, labelLimit=120)),
-            y=alt.Y("Quantity_Prev:Q", title="Wolumen tygodniowy"),
-            tooltip=[
-                alt.Tooltip("Week Label:N", title="Tydzien"),
-                alt.Tooltip("Quantity_Prev:Q", title="Poprzedni release", format=",.0f"),
-                alt.Tooltip("Quantity_Curr:Q", title="Aktualny release", format=",.0f"),
-                alt.Tooltip("Delta:Q", title="Delta release", format=",.0f"),
-                alt.Tooltip("Working_Days_PL:Q", title="Dni robocze PL"),
-                alt.Tooltip("Week Status:N", title="Status"),
-            ],
+    fig.add_trace(
+        go.Scatter(
+            x=chart_data["Week Start"],
+            y=chart_data["Quantity_Prev"],
+            mode="lines+markers",
+            name="Poprzedni release",
+            line={"color": "#8b949e", "width": 2.3},
+            marker={"size": 6, "color": "#8b949e"},
+            customdata=chart_data[["Week Label", "Quantity_Curr", "Delta", "Working_Days_PL", "Week Status"]].to_numpy(),
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>"
+                "Poprzedni release: %{y:,.0f}<br>"
+                "Aktualny release: %{customdata[1]:,.0f}<br>"
+                "Delta: %{customdata[2]:+,.0f}<br>"
+                "Dni robocze PL: %{customdata[3]}<br>"
+                "Status: %{customdata[4]}<extra></extra>"
+            ),
         )
     )
-    current_line = (
-        alt.Chart(chart_data)
-        .mark_line(
-            point=alt.OverlayMarkDef(size=90, filled=True, fill="#eef4ff", stroke="#3c78d8", strokeWidth=2.2),
-            strokeWidth=3.4,
-            interpolate="monotone",
-            color="#6cb0ff",
-        )
-        .encode(
-            x=alt.X("Week Start:T", title="Tydzien ISO", axis=alt.Axis(labelAngle=-24, labelLimit=120)),
-            y=alt.Y("Quantity_Curr:Q", title="Wolumen tygodniowy"),
-            tooltip=[
-                alt.Tooltip("Week Label:N", title="Tydzien"),
-                alt.Tooltip("Quantity_Prev:Q", title="Poprzedni release", format=",.0f"),
-                alt.Tooltip("Quantity_Curr:Q", title="Aktualny release", format=",.0f"),
-                alt.Tooltip("Delta:Q", title="Delta release", format=",.0f"),
-                alt.Tooltip("Avg Current / Working Day:Q", title="Na dzien roboczy", format=",.2f"),
-                alt.Tooltip("Week Status:N", title="Status"),
-            ],
+    fig.add_trace(
+        go.Scatter(
+            x=chart_data["Week Start"],
+            y=chart_data["Quantity_Curr"],
+            mode="lines+markers",
+            name="Aktualny release",
+            line={"color": "#2d81ff", "width": 3.2},
+            marker={"size": 7, "color": "#f0f6fc", "line": {"color": "#2d81ff", "width": 2}},
+            customdata=chart_data[["Week Label", "Quantity_Prev", "Delta", "Avg Current / Working Day", "Week Status"]].to_numpy(),
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>"
+                "Aktualny release: %{y:,.0f}<br>"
+                "Poprzedni release: %{customdata[1]:,.0f}<br>"
+                "Delta: %{customdata[2]:+,.0f}<br>"
+                "Na dzien roboczy: %{customdata[3]:,.2f}<br>"
+                "Status: %{customdata[4]}<extra></extra>"
+            ),
         )
     )
-    return apply_chart_theme(
-        alt.layer(current_area, prev_line, current_line).properties(height=360)
+    fig.update_layout(
+        height=360,
+        hovermode="x unified",
+        xaxis_title="Tydzien ISO",
+        yaxis_title="Wolumen tygodniowy",
     )
+    fig.update_xaxes(tickangle=-24)
+    return fig
 
 
 def build_weekly_delta_chart(weekly_summary):
@@ -3812,186 +4634,179 @@ def build_weekly_delta_chart(weekly_summary):
 
     chart_data = weekly_summary.copy()
     chart_data["Week Start"] = pd.to_datetime(chart_data["Week Start"])
-    chart_data["WoW Color"] = chart_data["WoW Delta"].apply(
-        lambda value: "#43d3b1" if value > 0 else "#ff6f6f" if value < 0 else "#7c93c9"
-    )
-    bars = (
-        alt.Chart(chart_data)
-        .mark_bar(cornerRadiusTopLeft=6, cornerRadiusTopRight=6, opacity=0.88)
-        .encode(
-            x=alt.X("Week Start:T", title="Tydzien ISO", axis=alt.Axis(labelAngle=-24, labelLimit=120)),
-            y=alt.Y("WoW Delta:Q", title="Delta WoW"),
-            color=alt.Color("WoW Color:N", scale=None, legend=None),
-            tooltip=[
-                alt.Tooltip("Week Label:N", title="Tydzien"),
-                alt.Tooltip("WoW Delta:Q", title="Zmiana vs poprzedni tydzien", format=",.0f"),
-                alt.Tooltip("WoW Percent Label:N", title="Zmiana WoW %"),
-                alt.Tooltip("Working_Days_PL:Q", title="Dni robocze PL"),
-                alt.Tooltip("Week Status:N", title="Status"),
-            ],
+    colors = [
+        "#3fb950" if value > 0 else "#f85149" if value < 0 else "#8b949e"
+        for value in chart_data["WoW Delta"]
+    ]
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=chart_data["Week Start"],
+            y=chart_data["WoW Delta"],
+            name="Delta WoW",
+            marker={"color": colors, "line": {"color": "rgba(255,255,255,0.05)", "width": 1}},
+            customdata=chart_data[["Week Label", "WoW Percent Label", "Working_Days_PL", "Week Status"]].to_numpy(),
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>"
+                "Delta WoW: %{y:+,.0f}<br>"
+                "Zmiana WoW %: %{customdata[1]}<br>"
+                "Dni robocze PL: %{customdata[2]}<br>"
+                "Status: %{customdata[3]}<extra></extra>"
+            ),
         )
     )
-    line = (
-        alt.Chart(chart_data)
-        .mark_line(color="#d7e7ff", strokeWidth=2, opacity=0.55)
-        .encode(
-            x=alt.X("Week Start:T", title="Tydzien ISO", axis=alt.Axis(labelAngle=-24, labelLimit=120)),
-            y=alt.Y("Delta:Q", title="Delta tygodniowa"),
+    fig.add_trace(
+        go.Scatter(
+            x=chart_data["Week Start"],
+            y=chart_data["Delta"],
+            mode="lines+markers",
+            name="Delta release",
+            line={"color": "#00c4b4", "width": 2.1},
+            marker={"size": 6, "color": "#00c4b4"},
+            hovertemplate="Delta release: %{y:+,.0f}<extra></extra>",
         )
     )
-    return apply_chart_theme(alt.layer(bars, line).properties(height=320))
+    fig.update_layout(
+        height=320,
+        hovermode="x unified",
+        xaxis_title="Tydzien ISO",
+        yaxis_title="Delta tygodniowa",
+    )
+    fig.update_xaxes(tickangle=-24)
+    return fig
 
 
 def build_quantity_chart(date_summary, x_title):
+    if date_summary.empty:
+        return None
+
     chart_data = date_summary.sort_values("Analysis Date").copy()
     latest_point = chart_data.tail(1).copy()
-    latest_point["Current Label"] = latest_point["Quantity_Curr"].map(lambda value: f"Aktualnie {value:,.0f}")
-    latest_point["Previous Label"] = latest_point["Quantity_Prev"].map(lambda value: f"Poprzednio {value:,.0f}")
-
-    prev_line = (
-        alt.Chart(chart_data)
-        .mark_line(strokeWidth=2.6, interpolate="monotone", color="#6f8ed1", opacity=0.9)
-        .encode(
-            x=alt.X("Analysis Date:T", title=x_title, axis=alt.Axis(labelAngle=-24, labelLimit=140)),
-            y=alt.Y("Quantity_Prev:Q", title="Ilość otwarta"),
-            tooltip=[
-                alt.Tooltip("Analysis Date:T", title="Data"),
-                alt.Tooltip("Quantity_Prev:Q", title="Poprzednia ilość", format=",.0f"),
-            ],
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=chart_data["Analysis Date"],
+            y=chart_data["Quantity_Curr"],
+            mode="lines",
+            line={"color": "rgba(45,129,255,0.24)", "width": 0},
+            fill="tozeroy",
+            fillcolor="rgba(45,129,255,0.18)",
+            name="Aktualna ilość area",
+            hoverinfo="skip",
+            showlegend=False,
         )
     )
-    current_area = (
-        alt.Chart(chart_data)
-        .mark_area(color="#5092ff", opacity=0.18, interpolate="monotone")
-        .encode(
-            x=alt.X("Analysis Date:T", title=x_title, axis=alt.Axis(labelAngle=-24, labelLimit=140)),
-            y=alt.Y("Quantity_Curr:Q", title="Ilość otwarta"),
+    fig.add_trace(
+        go.Scatter(
+            x=chart_data["Analysis Date"],
+            y=chart_data["Quantity_Prev"],
+            mode="lines+markers",
+            name="Poprzednia ilość",
+            line={"color": "#8b949e", "width": 2.4},
+            marker={"size": 6, "color": "#8b949e"},
+            customdata=chart_data[["Quantity_Curr", "Delta"]].to_numpy(),
+            hovertemplate=(
+                "Data: %{x|%Y-%m-%d}<br>"
+                "Poprzednia ilość: %{y:,.0f}<br>"
+                "Aktualna ilość: %{customdata[0]:,.0f}<br>"
+                "Bilans zmian: %{customdata[1]:+,.0f}<extra></extra>"
+            ),
         )
     )
-    current_line = (
-        alt.Chart(chart_data)
-        .mark_line(
-            point=alt.OverlayMarkDef(size=90, filled=True, fill="#eef4ff", stroke="#3c78d8", strokeWidth=2.2),
-            strokeWidth=3.6,
-            interpolate="monotone",
-            color="#6cb0ff",
-        )
-        .encode(
-            x=alt.X("Analysis Date:T", title=x_title, axis=alt.Axis(labelAngle=-24, labelLimit=140)),
-            y=alt.Y("Quantity_Curr:Q", title="Ilość otwarta"),
-            tooltip=[
-                alt.Tooltip("Analysis Date:T", title="Data"),
-                alt.Tooltip("Quantity_Prev:Q", title="Poprzednia ilość", format=",.0f"),
-                alt.Tooltip("Quantity_Curr:Q", title="Aktualna ilość", format=",.0f"),
-                alt.Tooltip("Delta:Q", title="Bilans zmian", format=",.0f"),
-            ],
+    fig.add_trace(
+        go.Scatter(
+            x=chart_data["Analysis Date"],
+            y=chart_data["Quantity_Curr"],
+            mode="lines+markers",
+            name="Aktualna ilość",
+            line={"color": "#2d81ff", "width": 3.4},
+            marker={"size": 7, "color": "#f0f6fc", "line": {"color": "#2d81ff", "width": 2}},
+            customdata=chart_data[["Quantity_Prev", "Delta"]].to_numpy(),
+            hovertemplate=(
+                "Data: %{x|%Y-%m-%d}<br>"
+                "Aktualna ilość: %{y:,.0f}<br>"
+                "Poprzednia ilość: %{customdata[0]:,.0f}<br>"
+                "Bilans zmian: %{customdata[1]:+,.0f}<extra></extra>"
+            ),
         )
     )
-    focus_rule = (
-        alt.Chart(latest_point)
-        .mark_rule(color="#1f3447", strokeWidth=1.2, opacity=0.7)
-        .encode(x="Analysis Date:T")
-    )
-    current_label = (
-        alt.Chart(latest_point)
-        .mark_text(
-            align="left",
-            baseline="middle",
-            dx=12,
-            dy=-4,
-            color="#eef4ff",
-            fontSize=13,
-            fontWeight="bold",
+    if not latest_point.empty:
+        latest_row = latest_point.iloc[0]
+        fig.add_vline(
+            x=latest_row["Analysis Date"],
+            line_width=1,
+            line_dash="dot",
+            line_color="rgba(255,255,255,0.18)",
         )
-        .encode(x="Analysis Date:T", y="Quantity_Curr:Q", text="Current Label:N")
-    )
-    previous_label = (
-        alt.Chart(latest_point)
-        .mark_text(
-            align="left",
-            baseline="middle",
-            dx=12,
-            dy=14,
-            color="#b6c8dd",
-            fontSize=12,
-            fontWeight="bold",
+        fig.add_annotation(
+            x=latest_row["Analysis Date"],
+            y=latest_row["Quantity_Curr"],
+            text=f"Aktualnie {latest_row['Quantity_Curr']:,.0f}",
+            showarrow=False,
+            xanchor="left",
+            yshift=-20,
+            font={"color": "#f0f6fc", "size": 12},
         )
-        .encode(x="Analysis Date:T", y="Quantity_Prev:Q", text="Previous Label:N")
-    )
-    chart = alt.layer(
-        current_area,
-        prev_line,
-        focus_rule,
-        current_line,
-        current_label,
-        previous_label,
-    ).properties(
+        fig.add_annotation(
+            x=latest_row["Analysis Date"],
+            y=latest_row["Quantity_Prev"],
+            text=f"Poprzednio {latest_row['Quantity_Prev']:,.0f}",
+            showarrow=False,
+            xanchor="left",
+            yshift=18,
+            font={"color": "#8b949e", "size": 11},
+        )
+    fig.update_layout(
         height=420,
-        padding={"left": 6, "right": 22, "top": 12, "bottom": 8},
+        hovermode="x unified",
+        xaxis_title=x_title,
+        yaxis_title="Ilość otwarta",
     )
-    return apply_chart_theme(chart)
+    fig.update_xaxes(tickangle=-24)
+    return fig
 
 
 def build_delta_chart(date_summary, x_title):
+    if date_summary.empty:
+        return None
+
     chart_data = date_summary.sort_values("Analysis Date").copy()
     chart_data["Abs Delta"] = chart_data["Delta"].abs()
     label_source = chart_data.nlargest(min(6, len(chart_data)), "Abs Delta").copy()
     label_source["Delta Label"] = label_source["Delta"].map(lambda value: f"{value:+,.0f}")
-
-    zero_line = alt.Chart(pd.DataFrame({"y": [0]})).mark_rule(color="#2b3a4d", strokeWidth=1.2).encode(y="y:Q")
-    bars = (
-        alt.Chart(chart_data)
-        .mark_bar(cornerRadiusTopLeft=7, cornerRadiusTopRight=7, opacity=0.92, size=20)
-        .encode(
-            x=alt.X("Analysis Date:T", title=x_title, axis=alt.Axis(labelAngle=-24, labelLimit=140)),
-            y=alt.Y("Delta:Q", title="Zmiana ilości"),
-            color=alt.condition(
-                alt.datum.Delta >= 0,
-                alt.value("#5f8b75"),
-                alt.value("#c56b61"),
+    label_lookup = dict(zip(label_source["Analysis Date"], label_source["Delta Label"]))
+    colors = [
+        "#3fb950" if value > 0 else "#f85149" if value < 0 else "#8b949e"
+        for value in chart_data["Delta"]
+    ]
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=chart_data["Analysis Date"],
+            y=chart_data["Delta"],
+            marker={"color": colors, "line": {"color": "rgba(255,255,255,0.05)", "width": 1}},
+            name="Bilans zmian",
+            customdata=chart_data[["Alerts"]].to_numpy() if "Alerts" in chart_data.columns else None,
+            hovertemplate=(
+                "Data: %{x|%Y-%m-%d}<br>"
+                "Zmiana ilości: %{y:+,.0f}<br>"
+                "Liczba alertów: %{customdata[0]}<extra></extra>"
+                if "Alerts" in chart_data.columns
+                else "Data: %{x|%Y-%m-%d}<br>Zmiana ilości: %{y:+,.0f}<extra></extra>"
             ),
-            tooltip=[
-                alt.Tooltip("Analysis Date:T", title="Data"),
-                alt.Tooltip("Delta:Q", title="Zmiana ilości", format=",.0f"),
-                alt.Tooltip("Alerts:Q", title="Liczba alertów"),
-            ],
+            text=[label_lookup.get(value, "") for value in chart_data["Analysis Date"]],
+            textposition="outside",
         )
     )
-    positive_labels = (
-        alt.Chart(label_source[label_source["Delta"] >= 0])
-        .mark_text(
-            baseline="bottom",
-            dy=-6,
-            color="#e8f3ed",
-            fontWeight="bold",
-            fontSize=11,
-        )
-        .encode(
-            x="Analysis Date:T",
-            y="Delta:Q",
-            text="Delta Label:N",
-        )
-    )
-    negative_labels = (
-        alt.Chart(label_source[label_source["Delta"] < 0])
-        .mark_text(
-            baseline="top",
-            dy=8,
-            color="#f8d7d3",
-            fontWeight="bold",
-            fontSize=11,
-        )
-        .encode(
-            x="Analysis Date:T",
-            y="Delta:Q",
-            text="Delta Label:N",
-        )
-    )
-    chart = alt.layer(zero_line, bars, positive_labels, negative_labels).properties(
+    fig.add_hline(y=0, line_width=1, line_color="rgba(255,255,255,0.14)")
+    fig.update_layout(
         height=320,
-        padding={"left": 6, "right": 22, "top": 12, "bottom": 8},
+        hovermode="x unified",
+        xaxis_title=x_title,
+        yaxis_title="Zmiana ilości",
     )
-    return apply_chart_theme(chart)
+    fig.update_xaxes(tickangle=-24)
+    return fig
 
 
 def build_product_bar_source(product_summary, chart_type):
@@ -4012,10 +4827,10 @@ def build_product_bar_source(product_summary, chart_type):
 def build_product_bar_chart(product_summary, chart_type):
     source = build_product_bar_source(product_summary, chart_type)
     if chart_type == "increase":
-        color = "#5f8b75"
+        color = "#3fb950"
         title = "Największe wzrosty"
     else:
-        color = "#c56b61"
+        color = "#f85149"
         title = "Największe spadki"
 
     if source.empty:
@@ -4025,44 +4840,72 @@ def build_product_bar_chart(product_summary, chart_type):
         lambda value: value if len(str(value)) <= 42 else f"{str(value)[:39]}..."
     )
     source["Delta Label"] = source["Delta"].map(lambda value: f"{value:+,.0f}")
-    chart = (
-        alt.Chart(source)
-        .mark_bar(cornerRadiusTopRight=6, cornerRadiusBottomRight=6, color=color, opacity=0.94)
-        .encode(
-            x=alt.X("Delta:Q", title="Zmiana ilości"),
-            y=alt.Y(
-                "Display Label:N",
-                sort="-x",
-                title=None,
-                axis=alt.Axis(labelLimit=280, labelPadding=12),
+    source = source.sort_values("Delta", ascending=True)
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=source["Delta"],
+            y=source["Display Label"],
+            orientation="h",
+            marker={"color": color, "line": {"color": "rgba(255,255,255,0.05)", "width": 1}},
+            text=source["Delta Label"],
+            textposition="outside",
+            name=title,
+            customdata=source[["Part Number", "Part Description"]].to_numpy(),
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>"
+                "%{customdata[1]}<br>"
+                "Zmiana ilości: %{x:+,.0f}<extra></extra>"
             ),
-            tooltip=[
-                alt.Tooltip("Part Description:N", title="Produkt"),
-                alt.Tooltip("Delta:Q", title="Zmiana ilości", format=",.0f"),
-            ],
-        )
-        .properties(height=max(340, len(source) * 34))
-    )
-    text = (
-        alt.Chart(source)
-        .mark_text(
-            align="left" if chart_type == "increase" else "right",
-            dx=8 if chart_type == "increase" else -8,
-            color="#e7edf6",
-            fontWeight="bold",
-            fontSize=11,
-        )
-        .encode(
-            x="Delta:Q",
-            y=alt.Y("Display Label:N", sort="-x", title=None),
-            text="Delta Label:N",
         )
     )
-    try:
-        layered = alt.layer(chart, text).properties(height=max(340, len(source) * 34))
-        return apply_chart_theme(layered), title
-    except Exception:
-        return apply_chart_theme(chart), title
+    fig.update_layout(
+        height=max(340, len(source) * 34),
+        xaxis_title="Zmiana ilości",
+        yaxis_title=None,
+        showlegend=False,
+    )
+    return fig, title
+
+
+def build_product_waterfall_chart(product_summary):
+    if product_summary.empty:
+        return None
+
+    source = (
+        product_summary.assign(Abs_Delta=product_summary["Delta"].abs())
+        .sort_values("Abs_Delta", ascending=False)
+        .head(8)
+        .copy()
+    )
+    if source.empty:
+        return None
+
+    source["Label"] = source["Part Number"].astype(str).str[:14]
+    fig = go.Figure(
+        go.Waterfall(
+            x=source["Label"],
+            y=source["Delta"],
+            measure=["relative"] * len(source),
+            connector={"line": {"color": "rgba(255,255,255,0.18)"}},
+            increasing={"marker": {"color": "#3fb950"}},
+            decreasing={"marker": {"color": "#f85149"}},
+            totals={"marker": {"color": "#2d81ff"}},
+            customdata=source[["Part Number", "Part Description"]].to_numpy(),
+            hovertemplate=(
+                "<b>%{customdata[0]}</b><br>"
+                "%{customdata[1]}<br>"
+                "Delta: %{y:+,.0f}<extra></extra>"
+            ),
+        )
+    )
+    fig.update_layout(
+        height=360,
+        xaxis_title="Produkty",
+        yaxis_title="Delta wolumenu",
+        showlegend=False,
+    )
+    return fig
 
 
 def build_change_mix_source(dataframe):
@@ -4077,42 +4920,33 @@ def build_change_mix_source(dataframe):
 
 def build_change_mix_chart(dataframe):
     mix = build_change_mix_source(dataframe)
+    if mix.empty:
+        return None
+
     order = ["Wzrost", "Spadek", "Bez zmian"]
-    colors = ["#5f8b75", "#c56b61", "#6f87ab"]
-    bars = (
-        alt.Chart(mix)
-        .mark_bar(cornerRadiusTopRight=6, cornerRadiusBottomRight=6, size=28)
-        .encode(
-            x=alt.X("Rows:Q", title="Liczba pozycji"),
-            y=alt.Y("Direction Label:N", sort=order, title=None),
-            color=alt.Color(
-                "Direction Label:N",
-                sort=order,
-                scale=alt.Scale(domain=order, range=colors),
-                legend=None,
+    color_map = {"Wzrost": "#3fb950", "Spadek": "#f85149", "Bez zmian": "#8b949e"}
+    mix["SortOrder"] = mix["Direction Label"].map({label: index for index, label in enumerate(order)})
+    mix = mix.sort_values("SortOrder", ascending=False)
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=mix["Rows"],
+            y=mix["Direction Label"],
+            orientation="h",
+            marker={"color": [color_map.get(label, "#8b949e") for label in mix["Direction Label"]]},
+            text=mix["Share"].map(lambda value: f"{value:.1%}"),
+            textposition="outside",
+            customdata=mix[["Total_Delta"]].to_numpy(),
+            hovertemplate=(
+                "Kierunek: %{y}<br>"
+                "Liczba pozycji: %{x}<br>"
+                "Bilans zmian: %{customdata[0]:+,.0f}<extra></extra>"
             ),
-            tooltip=[
-                alt.Tooltip("Direction Label:N", title="Kierunek"),
-                alt.Tooltip("Rows:Q", title="Liczba pozycji"),
-                alt.Tooltip("Share:Q", title="Udział", format=".1%"),
-                alt.Tooltip("Total_Delta:Q", title="Bilans zmian", format=",.0f"),
-            ],
+            showlegend=False,
         )
     )
-    labels = (
-        alt.Chart(mix)
-        .mark_text(align="left", dx=8, color="#e7edf6", fontSize=11, fontWeight="bold")
-        .encode(
-            x="Rows:Q",
-            y=alt.Y("Direction Label:N", sort=order, title=None),
-            text=alt.Text("Share:Q", format=".1%"),
-        )
-    )
-    chart = alt.layer(bars, labels).properties(
-        height=240,
-        padding={"left": 6, "right": 20, "top": 8, "bottom": 8},
-    )
-    return apply_chart_theme(chart)
+    fig.update_layout(height=240, xaxis_title="Liczba pozycji", yaxis_title=None)
+    return fig
 
 
 def build_key_findings(dataframe, product_summary, date_summary, date_basis):
@@ -5484,22 +6318,111 @@ def render_file_analysis_workspace(
     render_module_content("admin", module_data, ui)
 
 
-def render_home_screen(logo_markup):
-    ui_shell.render_home_hero(logo_markup)
-    top_row = st.columns(2, gap="large")
-    bottom_row = st.columns(2, gap="large")
-    all_columns = list(top_row) + list(bottom_row)
+def render_sidebar_upload_controls():
+    render_section_header(
+        "Workspace",
+        "Pliki wejściowe",
+        "Dodaj poprzedni i aktualny release. Logika uploadu i przechowywania plikow pozostaje bez zmian.",
+    )
 
-    for index, tile in enumerate(PRIMARY_TILES):
-        with all_columns[index]:
-            with st.container(key=f"home_tile_{tile.key}"):
-                ui_shell.render_tile_card(tile)
-                if st.button(tile.action_label, key=f"home_tile_button_{tile.key}", use_container_width=True):
-                    if tile.key == "filters":
-                        open_filters_panel()
-                    else:
-                        set_active_view(tile.key)
-                    st.rerun()
+    render_upload_card(
+        "Poprzedni",
+        "Baseline release",
+        "Plik referencyjny do porownania aktualnego stanu planu i wysylek.",
+    )
+    previous_upload = st.file_uploader(
+        "Upload Previous Release",
+        type=["xlsx"],
+        key=get_upload_widget_key("previous"),
+        label_visibility="collapsed",
+    )
+    if previous_upload is not None:
+        store_uploaded_release("previous", previous_upload)
+    stored_previous = get_stored_upload("previous")
+    if stored_previous is not None:
+        st.caption(f"Zaladowany plik: {stored_previous['name']}")
+        if st.button("Usun poprzedni plik", key="sidebar_clear_previous_upload", use_container_width=True):
+            clear_uploaded_release("previous")
+            st.rerun()
+
+    render_upload_card(
+        "Aktualny",
+        "Current release",
+        "Plik, z ktorego aplikacja liczy zmiany, alerty i aktualny wolumen.",
+    )
+    current_upload = st.file_uploader(
+        "Upload Current Release",
+        type=["xlsx"],
+        key=get_upload_widget_key("current"),
+        label_visibility="collapsed",
+    )
+    if current_upload is not None:
+        store_uploaded_release("current", current_upload)
+    stored_current = get_stored_upload("current")
+    if stored_current is not None:
+        st.caption(f"Zaladowany plik: {stored_current['name']}")
+        if st.button("Usun aktualny plik", key="sidebar_clear_current_upload", use_container_width=True):
+            clear_uploaded_release("current")
+            st.rerun()
+
+    return stored_previous, stored_current
+
+
+def render_sidebar_filters(analysis_bundle=None):
+    with st.sidebar:
+        render_sidebar_user(st)
+        previous_release, current_release = render_sidebar_upload_controls()
+
+        prev_meta = analysis_bundle["prev_meta"] if analysis_bundle else None
+        curr_meta = analysis_bundle["curr_meta"] if analysis_bundle else None
+        brand_context = (
+            analysis_bundle["brand_context"]
+            if analysis_bundle
+            else detect_brand_context(
+                {"file_name": previous_release.get("name")} if previous_release else None,
+                {"file_name": current_release.get("name")} if current_release else None,
+            )
+        )
+
+        render_filter_panel_shell(
+            kicker="Filters",
+            title="Filtry i status analizy",
+            copy="Lewy sidebar pozostaje jedynym miejscem dla uploadu oraz filtrowania.",
+        )
+        render_side_panel_brand(brand_context)
+        render_file_slot_cards(
+            prev_file=None if prev_meta else previous_release,
+            current_file=None if curr_meta else current_release,
+            prev_meta=prev_meta,
+            curr_meta=curr_meta,
+        )
+
+        if analysis_bundle is None:
+            st.info("Dodaj oba pliki, aby aktywowac filtry i porownanie release'ow.")
+            return build_default_filter_state(), brand_context
+
+        st.caption(brand_context.get("format_copy", ""))
+        return render_filter_controls(analysis_bundle["result"]), brand_context
+
+
+def render_dashboard_view(module_data, ui):
+    module_data.module_access = get_module_access_level("dashboard", auth_user=get_auth_user())
+    render_module_content("dashboard", module_data, ui)
+
+
+def render_reports_view(module_data, ui):
+    module_data.module_access = get_module_access_level("reports", auth_user=get_auth_user())
+    render_module_content("reports", module_data, ui)
+    render_section_header(
+        "Export",
+        "Eksport analityczny",
+        "Pelny eksport filtrowanych danych oraz raportow Excel pozostaje dostepny w sekcji Reports.",
+    )
+    render_extended_export_actions(
+        module_data.csv_bytes or b"",
+        module_data.excel_bytes or b"",
+        module_data.professional_excel_bytes or b"",
+    )
 
 
 init_auth_state()
@@ -5509,7 +6432,8 @@ if not st.session_state["authenticated"]:
     render_login_screen()
     st.stop()
 
-render_workspace_actions()
+if st.session_state.get("active_view") not in PRIMARY_VIEW_KEYS:
+    st.session_state["active_view"] = "dashboard"
 
 analysis_bundle = None
 analysis_error = None
@@ -5519,58 +6443,36 @@ if workspace_is_ready():
     except Exception as exc:
         analysis_error = exc
 
-active_view = st.session_state.get("active_view", "home")
+filter_state, sidebar_brand_context = render_sidebar_filters(analysis_bundle)
 logo_markup = ui_shell.build_logo_markup(logo_data_uri())
-
-if active_view == "home":
-    render_home_screen(logo_markup)
-    if st.session_state.get("filters_expanded", False):
-        with st.expander("Filtry", expanded=True):
-            ui_shell.render_panel_intro(
-                "Filtry",
-                "Panel filtrow",
-                "Filtry stana sie aktywne po zaladowaniu dwoch plikow w sekcji Analiza plikow.",
-            )
-            if workspace_is_ready() and analysis_bundle is not None:
-                render_filter_controls(analysis_bundle["result"])
-            else:
-                st.info("Najpierw zaladuj poprzedni i aktualny plik w widoku Analiza plikow.")
-                if st.button("Przejdz do Analiza plikow", key="home_to_files_from_filters", use_container_width=True):
-                    set_active_view("files", close_filters=False)
-                    st.rerun()
-    st.stop()
-
-render_view_shell(active_view, logo_markup)
 
 if analysis_error is not None:
     st.error(f"Blad wczytywania plikow: {analysis_error}")
 
 if analysis_bundle is None:
-    if active_view == "files":
-        render_file_analysis_workspace(
-            module_data=None,
-            ui=build_ui_helpers(),
-            filtered_df=pd.DataFrame(),
-            product_summary=pd.DataFrame(columns=["Part Number"]),
-            prev_meta={},
-            curr_meta={},
-            filter_state=build_default_filter_state(),
-            excel_bytes=b"",
-            csv_bytes=b"",
-            professional_excel_bytes=b"",
-        )
-    else:
-        render_empty_analysis_prompt(
-            "Workspace oczekuje na pliki",
-            "Najpierw zaladuj poprzedni i aktualny plik w sekcji Analiza plikow. Dopiero wtedy aktywuja sie dashboard, planner, wykresy i eksport.",
-        )
+    render_app_header(
+        sidebar_brand_context,
+        APP_TITLE,
+        "Enterprise dashboard do porownywania release'ow. Dashboard i Reports aktywuja sie po zaladowaniu dwoch plikow Excel.",
+        meta_items=[
+            "Tylko Dashboard i Reports",
+            "Filtry pozostaja po lewej stronie",
+            "Planner i pozostala logika zachowane w repo",
+        ],
+        file_caption="Oczekiwanie na komplet plikow wejsciowych",
+    )
+    ui_shell.render_panel_intro(
+        "Workspace",
+        "Dashboard oczekuje na dane",
+        "Dodaj poprzedni i aktualny release w lewym sidebarze, aby uruchomic analize, wykresy i eksporty.",
+    )
+    st.markdown(logo_markup, unsafe_allow_html=True)
     st.stop()
 
 prev_meta = analysis_bundle["prev_meta"]
 curr_meta = analysis_bundle["curr_meta"]
 result = analysis_bundle["result"]
-
-filter_state = render_global_filter_drawer(result)
+brand_context = analysis_bundle["brand_context"]
 
 date_basis = filter_state["date_basis"]
 selected_start_date = filter_state["selected_start_date"]
@@ -5654,8 +6556,6 @@ professional_excel_bytes = to_professional_weekly_report_bytes(
     selected_end_date,
 )
 
-build_workspace_context_cards(prev_meta, curr_meta, filter_state, filtered_df)
-
 ui = build_ui_helpers()
 module_data = build_module_context(
     filtered_df,
@@ -5674,26 +6574,36 @@ module_data = build_module_context(
     professional_excel_bytes=professional_excel_bytes,
 )
 
-if active_view == "dashboard":
-    module_data.module_access = get_module_access_level("dashboard", auth_user=get_auth_user())
-    render_module_content("dashboard", module_data, ui)
-elif active_view == "charts":
-    module_data.module_access = get_module_access_level("reports", auth_user=get_auth_user())
-    render_module_content("reports", module_data, ui)
+render_app_header(
+    brand_context,
+    APP_TITLE,
+    "Premium dark workspace z dwoma glownymi modulami: Dashboard i Reports. Filtry oraz upload pozostaja po lewej stronie.",
+    meta_items=[
+        describe_format_context(prev_meta, curr_meta),
+        f"PO {curr_meta.get('po_number', 'n/a')}",
+        f"Zakres {format_workspace_date_range(filter_state)}",
+        f"Wiersze po filtrach: {len(filtered_df):,}",
+    ],
+    file_caption=curr_meta.get("file_name", ""),
+)
+build_workspace_context_cards(prev_meta, curr_meta, filter_state, filtered_df)
+
+selected_view = st.segmented_control(
+    "Main view",
+    options=list(MAIN_VIEW_OPTIONS),
+    selection_mode="single",
+    default=st.session_state.get("active_view", "dashboard"),
+    required=True,
+    key="active_view",
+    format_func=lambda value: MODULE_LABELS.get(value, value.title()),
+    width="stretch",
+)
+selected_view = selected_view or "dashboard"
+
+if selected_view == "reports":
+    render_reports_view(module_data, ui)
 else:
-    module_data.module_access = get_module_access_level("planner", auth_user=get_auth_user())
-    render_file_analysis_workspace(
-        module_data,
-        ui,
-        filtered_df,
-        product_summary,
-        prev_meta,
-        curr_meta,
-        filter_state,
-        excel_bytes,
-        csv_bytes,
-        professional_excel_bytes,
-    )
+    render_dashboard_view(module_data, ui)
 
 st.stop()
 
