@@ -13,6 +13,7 @@ def render(data, ui):
     key_findings = data.key_findings
     excel_bytes = data.excel_bytes
     csv_bytes = data.csv_bytes
+    professional_excel_bytes = data.professional_excel_bytes
 
     if filtered_df.empty:
         st.info("Brak danych szczegolowych dla aktywnych filtrow.")
@@ -60,7 +61,7 @@ def render(data, ui):
     if csv_bytes is None:
         csv_bytes = detail_table.to_csv(index=False).encode("utf-8")
 
-    download_left, download_right = st.columns(2)
+    download_left, download_center, download_right = st.columns(3)
     with download_left:
         st.download_button(
             "Pobierz filtrowane dane CSV",
@@ -68,10 +69,18 @@ def render(data, ui):
             file_name="pjoter_development_release_change_filtered.csv",
             mime="text/csv",
         )
-    with download_right:
+    with download_center:
         st.download_button(
             "Pobierz raport Excel",
             data=excel_bytes,
             file_name="pjoter_development_release_change_report.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    with download_right:
+        st.download_button(
+            "Pobierz Weekly by Part Excel",
+            data=professional_excel_bytes or b"",
+            file_name="weekly_by_part_report.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            disabled=not professional_excel_bytes,
         )
