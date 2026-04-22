@@ -5494,6 +5494,23 @@ def render_view_shell(active_view, logo_markup):
             st.rerun()
 
 
+def format_workspace_date_range(filter_state):
+    if not isinstance(filter_state, dict):
+        return "Zakres nieustawiony"
+
+    start_date = filter_state.get("selected_start_date")
+    end_date = filter_state.get("selected_end_date")
+    if start_date is None or end_date is None:
+        return "Zakres nieustawiony"
+
+    try:
+        start_label = pd.Timestamp(start_date).strftime("%Y-%m-%d")
+        end_label = pd.Timestamp(end_date).strftime("%Y-%m-%d")
+    except Exception:
+        return "Zakres nieustawiony"
+    return f"{start_label} - {end_label}"
+
+
 def build_workspace_context_cards(prev_meta, curr_meta, filter_state, filtered_df):
     items = [
         {"label": "Format", "value": describe_format_context(prev_meta, curr_meta)},
@@ -5501,10 +5518,7 @@ def build_workspace_context_cards(prev_meta, curr_meta, filter_state, filtered_d
         {"label": "Planista", "value": curr_meta.get("planner_name", "n/a")},
         {
             "label": "Zakres",
-            "value": (
-                f"{filter_state['selected_start_date']:%Y-%m-%d} - "
-                f"{filter_state['selected_end_date']:%Y-%m-%d}"
-            ),
+            "value": format_workspace_date_range(filter_state),
         },
         {"label": "Wiersze po filtrach", "value": f"{len(filtered_df):,}"},
     ]

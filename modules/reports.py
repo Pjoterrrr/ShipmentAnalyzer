@@ -15,6 +15,15 @@ REPORT_VIEWS = {
 }
 
 
+def _interactive_chart(chart):
+    if chart is None:
+        return None
+    try:
+        return chart.interactive()
+    except Exception:
+        return chart
+
+
 def _make_excel_bytes(report_tables):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
@@ -355,7 +364,7 @@ def render(data, ui):
         executive_report = report_tables["Executive Report"]
         ui.render_chart_table_switch(
             "reports_executive_trend",
-            ui.build_quantity_chart(data.date_summary, ui.get_date_label(data.date_basis)),
+            _interactive_chart(ui.build_quantity_chart(data.date_summary, ui.get_date_label(data.date_basis))),
             data.date_summary,
             table_height=320,
         )
@@ -372,7 +381,7 @@ def render(data, ui):
         weekly_report = report_tables["Weekly Risk Report"]
         ui.render_chart_table_switch(
             "reports_weekly_risk",
-            ui.build_weekly_delta_chart(data.weekly_summary),
+            _interactive_chart(ui.build_weekly_delta_chart(data.weekly_summary)),
             _format_report_table(weekly_report),
             chart_empty_message="Brak danych tygodniowych do raportu ryzyka.",
             table_height=360,
@@ -391,7 +400,7 @@ def render(data, ui):
         increase_chart, _ = ui.build_product_bar_chart(data.product_summary, "increase")
         ui.render_chart_table_switch(
             "reports_product_change",
-            increase_chart,
+            _interactive_chart(increase_chart),
             _format_report_table(product_report.head(30)),
             chart_empty_message="Brak danych produktowych do raportu zmian.",
             table_height=360,
@@ -421,7 +430,7 @@ def render(data, ui):
         demand_report = report_tables["Demand Change Report"]
         ui.render_chart_table_switch(
             "reports_demand_change",
-            ui.apply_chart_theme(_build_demand_change_chart(demand_report)) if not demand_report.empty else None,
+            _interactive_chart(ui.apply_chart_theme(_build_demand_change_chart(demand_report))) if not demand_report.empty else None,
             _format_report_table(demand_report),
             chart_empty_message="Brak danych Demand Status do raportu.",
             table_height=320,
@@ -438,7 +447,7 @@ def render(data, ui):
     top_risk_report = report_tables["Top Risk Parts"]
     ui.render_chart_table_switch(
         "reports_top_risk",
-        ui.apply_chart_theme(_build_top_risk_chart(top_risk_report)) if not top_risk_report.empty else None,
+        _interactive_chart(ui.apply_chart_theme(_build_top_risk_chart(top_risk_report))) if not top_risk_report.empty else None,
         _format_report_table(top_risk_report.head(25)),
         chart_empty_message="Brak danych do rankingu ryzyka.",
         table_height=360,
