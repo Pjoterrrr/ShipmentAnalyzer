@@ -6426,6 +6426,31 @@ def render_sidebar_filters(analysis_bundle=None):
         return render_filter_controls(analysis_bundle["result"]), brand_context
 
 
+def render_sidebar_preload_state():
+    previous_release = get_stored_upload("previous")
+    current_release = get_stored_upload("current")
+    brand_context = detect_brand_context(
+        {"file_name": previous_release.get("name")} if previous_release else None,
+        {"file_name": current_release.get("name")} if current_release else None,
+    )
+
+    with st.sidebar:
+        render_sidebar_user(st)
+        render_filter_panel_shell(
+            kicker="Workspace",
+            title="Status analizy",
+            copy="Upload plikow jest widoczny od razu w glownej sekcji startowej. Filtry aktywuja sie po dodaniu obu release'ow.",
+        )
+        render_side_panel_brand(brand_context)
+        render_file_slot_cards(
+            prev_file=previous_release,
+            current_file=current_release,
+        )
+        st.info("Dodaj oba pliki, aby aktywowac Dashboard i Reports.")
+
+    return brand_context
+
+
 def render_dashboard_view(module_data, ui):
     module_data.module_access = get_module_access_level("dashboard", auth_user=get_auth_user())
     render_module_content("dashboard", module_data, ui)
@@ -6464,13 +6489,13 @@ if workspace_is_ready():
     except Exception as exc:
         analysis_error = exc
 
-filter_state, sidebar_brand_context = render_sidebar_filters(analysis_bundle)
 logo_markup = ui_shell.build_logo_markup(logo_data_uri())
 
 if analysis_error is not None:
     st.error(f"Blad wczytywania plikow: {analysis_error}")
 
 if analysis_bundle is None:
+    sidebar_brand_context = render_sidebar_preload_state()
     render_app_header(
         sidebar_brand_context,
         APP_TITLE,
@@ -6490,6 +6515,7 @@ if analysis_bundle is None:
     render_preload_state(logo_markup)
     st.stop()
 
+filter_state, sidebar_brand_context = render_sidebar_filters(analysis_bundle)
 prev_meta = analysis_bundle["prev_meta"]
 curr_meta = analysis_bundle["curr_meta"]
 result = analysis_bundle["result"]
