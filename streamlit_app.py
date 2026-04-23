@@ -3718,6 +3718,34 @@ def render_filter_panel_shell(
 
 
 def render_filter_controls(result):
+    return render_filters_panel(result)
+
+
+def render_calendar_panel(min_date, max_date):
+    st.markdown("###### Kalendarz")
+    selected_date_input = st.date_input(
+        "Wybierz przedział dat:",
+        value=(min_date, max_date),
+        min_value=min_date,
+        max_value=max_date,
+        help="Kliknij, aby wybrać pojedynczy dzień lub zakres dat do analizy.",
+        label_visibility="visible",
+    )
+    selected_start_date, selected_end_date = normalize_date_selection(
+        selected_date_input, min_date, max_date
+    )
+    swapped_dates = selected_start_date > selected_end_date
+    if swapped_dates:
+        selected_start_date, selected_end_date = selected_end_date, selected_start_date
+        st.warning("Zamieniono kolejność dat, aby zachować poprawny zakres analizy.")
+
+    st.caption(
+        f"Zakres aktywnej analizy: {selected_start_date.strftime('%Y-%m-%d')} — {selected_end_date.strftime('%Y-%m-%d')}"
+    )
+    return selected_start_date, selected_end_date
+
+
+def render_filters_panel(result):
     render_section_header(
         "Filtry",
         "Zakres i oś analizy",
@@ -3739,30 +3767,11 @@ def render_filter_controls(result):
     min_date = available_dates.min().date()
     max_date = available_dates.max().date()
 
-    st.markdown("###### Zakres czasowy")
-    selected_date_input = st.date_input(
-        "Wybierz przedział dat:",
-        value=(min_date, max_date),
-        min_value=min_date,
-        max_value=max_date,
-        help="Kliknij, aby wybrać pojedynczy dzień lub zakres dat do analizy.",
-        label_visibility="visible",
-    )
-    selected_start_date, selected_end_date = normalize_date_selection(
-        selected_date_input, min_date, max_date
-    )
-    swapped_dates = selected_start_date > selected_end_date
-    if swapped_dates:
-        selected_start_date, selected_end_date = selected_end_date, selected_start_date
-        st.warning("Zamieniono kolejność dat, aby zachować poprawny zakres analizy.")
-
-    st.caption(
-        f"Zakres aktywnej analizy: {selected_start_date.strftime('%Y-%m-%d')} — {selected_end_date.strftime('%Y-%m-%d')}"
-    )
+    selected_start_date, selected_end_date = render_calendar_panel(min_date, max_date)
 
     full_product_summary = summarize_products(result)
     all_products = full_product_summary["Product Label"].tolist()
-    st.markdown("###### Zakres produktów")
+    st.markdown("###### Filtry produktowe")
     selected_products = st.multiselect(
         "Produkty",
         options=all_products,
@@ -6556,7 +6565,8 @@ def render_sidebar_upload_controls():
 def render_sidebar_filters(analysis_bundle=None):
     with st.sidebar:
         render_sidebar_user(st)
-        previous_release, current_release = render_sidebar_upload_controls()
+        previous_release = get_stored_upload("previous")
+        current_release = get_stored_upload("current")
 
         prev_meta = analysis_bundle["prev_meta"] if analysis_bundle else None
         curr_meta = analysis_bundle["curr_meta"] if analysis_bundle else None
@@ -6572,9 +6582,30 @@ def render_sidebar_filters(analysis_bundle=None):
         render_filter_panel_shell(
             kicker="Filters",
             title="Filtry i status analizy",
-            copy="Lewy sidebar pozostaje jedynym miejscem dla uploadu oraz filtrowania.",
+            copy="Filtry i kalendarz pozostaja stale widoczne w górnej części sidebaru podczas pracy z analizą.",
         )
         render_side_panel_brand(brand_context)
+
+        if analysis_bundle is None:
+            render_sidebar_upload_controls()
+            render_file_slot_cards(
+                prev_file=previous_release,
+                current_file=current_release,
+            )
+            st.info("Dodaj oba pliki, aby aktywowac filtry i porownanie release'ow.")
+            return build_default_filter_state(), brand_context
+
+        st.caption(brand_context.get("format_copy", ""))
+        if st.session_state.get("success_status"):
+            st.success(st.session_state["success_status"])
+        filter_state = render_filters_panel(analysis_bundle["result"])
+        st.markdown('<hr class="side-panel-divider" />', unsafe_allow_html=True)
+        render_section_header(
+            "Workspace",
+            "Pliki i status",
+            "Upload i status pozostaja dostepne ponizej filtrow bez zaslaniania kalendarza.",
+        )
+        render_sidebar_upload_controls()
         render_file_slot_cards(
             prev_file=None if prev_meta else previous_release,
             current_file=None if curr_meta else current_release,
@@ -6584,15 +6615,7 @@ def render_sidebar_filters(analysis_bundle=None):
         if uploads_ready() and st.button("Przelicz analize", key="sidebar_recompute_analysis", use_container_width=True):
             trigger_analysis_refresh()
             st.rerun()
-
-        if analysis_bundle is None:
-            st.info("Dodaj oba pliki, aby aktywowac filtry i porownanie release'ow.")
-            return build_default_filter_state(), brand_context
-
-        st.caption(brand_context.get("format_copy", ""))
-        if st.session_state.get("success_status"):
-            st.success(st.session_state["success_status"])
-        return render_filter_controls(analysis_bundle["result"]), brand_context
+        return filter_state, brand_context
 
 
 def render_sidebar_preload_state():
