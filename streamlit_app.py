@@ -2754,20 +2754,18 @@ def render_module_navigation(auth_user=None):
     return selected_module or allowed_modules[0]
 
 
-def build_planner_scope_source(dataframe, selected_start_date, selected_end_date, selected_products, search_term):
-    planner_df = dataframe.copy()
-    planner_df["Ship Date"] = pd.to_datetime(planner_df["Ship Date"], errors="coerce")
-    planner_df = planner_df[
-        planner_df["Ship Date"].dt.date.between(selected_start_date, selected_end_date)
-    ]
+def build_planner_scope_source(dataframe, filter_state):
+    planner_df = apply_date_week_filters(dataframe, filter_state, date_basis_override="Ship Date")
 
+    selected_products = filter_state.get("selected_products", [])
     if selected_products:
         planner_df = planner_df[planner_df["Product Label"].isin(selected_products)]
     else:
         planner_df = planner_df.iloc[0:0]
 
-    if search_term.strip():
-        query = search_term.strip().lower()
+    search_term = str(filter_state.get("search_term", "")).strip()
+    if search_term:
+        query = search_term.lower()
         planner_df = planner_df[
             planner_df["Part Number"].str.lower().str.contains(query, na=False)
             | planner_df["Part Description"].str.lower().str.contains(query, na=False)
@@ -3321,6 +3319,13 @@ def init_ui_state():
     st.session_state.setdefault("active_view", "dashboard")
     st.session_state.setdefault("filters_expanded", False)
     st.session_state.setdefault("file_view", "overview")
+    st.session_state.setdefault("active_filters", {})
+    st.session_state.setdefault("date_from", None)
+    st.session_state.setdefault("date_to", None)
+    st.session_state.setdefault("week_from", None)
+    st.session_state.setdefault("week_to", None)
+    st.session_state.setdefault("filtered_data", pd.DataFrame())
+    st.session_state.setdefault("reset_filters_trigger", False)
     for nonce_key in UPLOAD_NONCE_KEYS.values():
         st.session_state.setdefault(nonce_key, 0)
     st.session_state.setdefault("uploaded_files", {})
@@ -3695,6 +3700,211 @@ def normalize_date_selection(selection, default_start, default_end):
     return values[0], values[1]
 
 
+def _coerce_date_value(value, fallback):
+    try:
+        if value is None:
+            return fallback
+        return pd.Timestamp(value).date()
+    except Exception:
+        return fallback
+
+
+def parse_week_label_sort_key(week_label):
+    normalized = str(week_label or "").strip().upper()
+    if "-W" not in normalized:
+        return None
+    year_part, week_part = normalized.split("-W", 1)
+    try:
+        return int(year_part) * 100 + int(week_part)
+    except ValueError:
+        return None
+
+
+def build_week_filter_options(dataframe, date_basis):
+    if dataframe is None or dataframe.empty or date_basis not in dataframe.columns:
+        return []
+
+    date_series = pd.to_datetime(dataframe[date_basis], errors="coerce")
+    valid_mask = date_series.notna()
+    if not valid_mask.any():
+        return []
+
+    iso = date_series[valid_mask].dt.isocalendar()
+    weeks = pd.DataFrame(
+        {
+            "iso_year": iso["year"].astype(int),
+            "iso_week": iso["week"].astype(int),
+        }
+    )
+    weeks["label"] = weeks["iso_year"].astype(str) + "-W" + weeks["iso_week"].astype(str).str.zfill(2)
+    weeks["sort_key"] = weeks["iso_year"] * 100 + weeks["iso_week"]
+    weeks = weeks.drop_duplicates(subset=["sort_key"]).sort_values("sort_key").reset_index(drop=True)
+    return weeks.to_dict("records")
+
+
+def ensure_filter_defaults(result, date_basis, full_product_summary):
+    if result is None or result.empty or date_basis not in result.columns:
+        return None
+
+    available_dates = pd.to_datetime(result[date_basis], errors="coerce").dropna().sort_values()
+    if available_dates.empty:
+        return None
+
+    min_date = available_dates.min().date()
+    max_date = available_dates.max().date()
+    week_options = build_week_filter_options(result, date_basis)
+    week_labels = [option["label"] for option in week_options]
+    all_products = full_product_summary["Product Label"].tolist()
+
+    if st.session_state.get("reset_filters_trigger"):
+        st.session_state["date_from"] = min_date
+        st.session_state["date_to"] = max_date
+        st.session_state["week_from"] = week_labels[0] if week_labels else None
+        st.session_state["week_to"] = week_labels[-1] if week_labels else None
+        st.session_state["selected_products_filter"] = all_products
+        st.session_state["analysis_search_term"] = ""
+        st.session_state["analysis_change_direction"] = ["Increase", "Decrease", "No Change"]
+        st.session_state["analysis_only_alerts"] = False
+        st.session_state["reset_filters_trigger"] = False
+
+    st.session_state["date_from"] = _coerce_date_value(st.session_state.get("date_from"), min_date)
+    st.session_state["date_to"] = _coerce_date_value(st.session_state.get("date_to"), max_date)
+
+    if st.session_state["date_from"] < min_date or st.session_state["date_from"] > max_date:
+        st.session_state["date_from"] = min_date
+    if st.session_state["date_to"] < min_date or st.session_state["date_to"] > max_date:
+        st.session_state["date_to"] = max_date
+
+    if week_labels:
+        if st.session_state.get("week_from") not in week_labels:
+            st.session_state["week_from"] = week_labels[0]
+        if st.session_state.get("week_to") not in week_labels:
+            st.session_state["week_to"] = week_labels[-1]
+    else:
+        st.session_state["week_from"] = None
+        st.session_state["week_to"] = None
+
+    selected_products = st.session_state.get("selected_products_filter")
+    if not isinstance(selected_products, list):
+        selected_products = list(all_products)
+    else:
+        selected_products = [product for product in selected_products if product in all_products]
+    st.session_state["selected_products_filter"] = selected_products
+    st.session_state.setdefault("analysis_search_term", "")
+    st.session_state.setdefault("analysis_change_direction", ["Increase", "Decrease", "No Change"])
+    st.session_state.setdefault("analysis_only_alerts", False)
+    return {
+        "min_date": min_date,
+        "max_date": max_date,
+        "week_options": week_options,
+        "all_products": all_products,
+    }
+
+
+def apply_date_week_filters(dataframe, filter_state, *, date_basis_override=None):
+    if dataframe is None:
+        return pd.DataFrame()
+
+    filtered = dataframe.copy()
+    date_basis = date_basis_override or filter_state.get("date_basis", DATE_OPTIONS[0])
+    if date_basis not in filtered.columns:
+        return filtered
+
+    date_series = pd.to_datetime(filtered[date_basis], errors="coerce")
+    mask = date_series.notna()
+
+    selected_start_date = filter_state.get("selected_start_date")
+    selected_end_date = filter_state.get("selected_end_date")
+    if selected_start_date is not None and selected_end_date is not None:
+        mask &= date_series.dt.date.between(selected_start_date, selected_end_date)
+
+    week_from_sort = parse_week_label_sort_key(filter_state.get("week_from"))
+    week_to_sort = parse_week_label_sort_key(filter_state.get("week_to"))
+    if week_from_sort is not None or week_to_sort is not None:
+        iso = date_series.dt.isocalendar()
+        week_sort = iso["year"].astype("Int64") * 100 + iso["week"].astype("Int64")
+        if week_from_sort is not None:
+            mask &= week_sort >= week_from_sort
+        if week_to_sort is not None:
+            mask &= week_sort <= week_to_sort
+
+    return filtered.loc[mask].copy()
+
+
+def apply_analysis_filters(dataframe, filter_state):
+    filtered = apply_date_week_filters(dataframe, filter_state)
+
+    selected_products = filter_state.get("selected_products", [])
+    if selected_products:
+        filtered = filtered[filtered["Product Label"].isin(selected_products)]
+    else:
+        filtered = filtered.iloc[0:0]
+
+    search_term = str(filter_state.get("search_term", "")).strip()
+    if search_term:
+        query = search_term.lower()
+        filtered = filtered[
+            filtered["Part Number"].str.lower().str.contains(query, na=False)
+            | filtered["Part Description"].str.lower().str.contains(query, na=False)
+        ]
+
+    selected_change_directions = filter_state.get(
+        "selected_change_directions",
+        ["Increase", "Decrease", "No Change"],
+    )
+    filtered = filtered[filtered["Change Direction"].isin(selected_change_directions)]
+
+    if filter_state.get("only_alerts"):
+        filtered = filtered[filtered["Alert"]]
+
+    return filtered.copy()
+
+
+def format_active_filter_summary(filter_state):
+    date_label = format_workspace_date_range(filter_state)
+    week_from = filter_state.get("week_from") or "n/a"
+    week_to = filter_state.get("week_to") or "n/a"
+    return f"Daty: {date_label} | Tygodnie: {week_from} -> {week_to}"
+
+
+def build_filter_state(
+    date_basis,
+    selected_start_date,
+    selected_end_date,
+    selected_products,
+    search_term,
+    selected_change_directions,
+    only_alerts,
+    full_product_summary,
+    week_from,
+    week_to,
+):
+    filter_state = {
+        "date_basis": date_basis,
+        "selected_start_date": selected_start_date,
+        "selected_end_date": selected_end_date,
+        "selected_products": selected_products,
+        "search_term": search_term,
+        "selected_change_directions": selected_change_directions,
+        "only_alerts": only_alerts,
+        "full_product_summary": full_product_summary,
+        "week_from": week_from,
+        "week_to": week_to,
+    }
+    st.session_state["active_filters"] = {
+        "date_basis": date_basis,
+        "date_from": selected_start_date,
+        "date_to": selected_end_date,
+        "week_from": week_from,
+        "week_to": week_to,
+        "selected_products": list(selected_products),
+        "search_term": search_term,
+        "selected_change_directions": list(selected_change_directions),
+        "only_alerts": bool(only_alerts),
+    }
+    return filter_state
+
+
 def render_filter_panel_shell(
     kicker="Panel Nawigacji",
     title="Filtry i kontekst analizy",
@@ -3721,28 +3931,79 @@ def render_filter_controls(result):
     return render_filters_panel(result)
 
 
-def render_calendar_panel(min_date, max_date):
-    st.markdown("###### Kalendarz")
-    selected_date_input = st.date_input(
-        "Wybierz przedział dat:",
-        value=(min_date, max_date),
-        min_value=min_date,
-        max_value=max_date,
-        help="Kliknij, aby wybrać pojedynczy dzień lub zakres dat do analizy.",
-        label_visibility="visible",
-    )
-    selected_start_date, selected_end_date = normalize_date_selection(
-        selected_date_input, min_date, max_date
-    )
-    swapped_dates = selected_start_date > selected_end_date
-    if swapped_dates:
+def render_date_week_filters(result, date_basis):
+    full_product_summary = summarize_products(result)
+    defaults = ensure_filter_defaults(result, date_basis, full_product_summary)
+    if defaults is None:
+        st.warning("Brak poprawnych wartosci dat dla aktywnej osi analizy.")
+        return None
+
+    min_date = defaults["min_date"]
+    max_date = defaults["max_date"]
+    week_options = defaults["week_options"]
+    week_labels = [option["label"] for option in week_options]
+
+    action_left, action_right = st.columns(2, gap="small")
+    with action_right:
+        if st.button("Reset filtrów", key="reset_analysis_filters", use_container_width=True):
+            st.session_state["reset_filters_trigger"] = True
+            st.rerun()
+
+    st.markdown("###### Zakres dat")
+    date_left, date_right = st.columns(2, gap="small")
+    with date_left:
+        selected_start_date = st.date_input(
+            "Data od",
+            min_value=min_date,
+            max_value=max_date,
+            key="date_from",
+        )
+    with date_right:
+        selected_end_date = st.date_input(
+            "Data do",
+            min_value=min_date,
+            max_value=max_date,
+            key="date_to",
+        )
+    if selected_start_date > selected_end_date:
         selected_start_date, selected_end_date = selected_end_date, selected_start_date
+        st.session_state["date_from"] = selected_start_date
+        st.session_state["date_to"] = selected_end_date
         st.warning("Zamieniono kolejność dat, aby zachować poprawny zakres analizy.")
 
+    st.markdown("###### Zakres tygodni")
+    if week_labels:
+        week_left, week_right = st.columns(2, gap="small")
+        with week_left:
+            week_from = st.selectbox("Tydzień od", options=week_labels, key="week_from")
+        with week_right:
+            week_to = st.selectbox("Tydzień do", options=week_labels, key="week_to")
+        week_from_sort = parse_week_label_sort_key(week_from)
+        week_to_sort = parse_week_label_sort_key(week_to)
+        if week_from_sort is not None and week_to_sort is not None and week_from_sort > week_to_sort:
+            week_from, week_to = week_to, week_from
+            st.session_state["week_from"] = week_from
+            st.session_state["week_to"] = week_to
+            st.warning("Zamieniono kolejność tygodni, aby zachować poprawny zakres analizy.")
+    else:
+        week_from = None
+        week_to = None
+        st.info("Brak danych tygodniowych dla aktywnej osi dat.")
+
     st.caption(
-        f"Zakres aktywnej analizy: {selected_start_date.strftime('%Y-%m-%d')} — {selected_end_date.strftime('%Y-%m-%d')}"
+        f"Aktywny zakres dat: {selected_start_date.strftime('%Y-%m-%d')} — {selected_end_date.strftime('%Y-%m-%d')}"
     )
-    return selected_start_date, selected_end_date
+    if week_from and week_to:
+        st.caption(f"Aktywny zakres tygodni: {week_from} — {week_to}")
+
+    return {
+        "selected_start_date": selected_start_date,
+        "selected_end_date": selected_end_date,
+        "week_from": week_from,
+        "week_to": week_to,
+        "full_product_summary": full_product_summary,
+        "all_products": defaults["all_products"],
+    }
 
 
 def render_filters_panel(result):
@@ -3763,21 +4024,24 @@ def render_filters_panel(result):
     )
     date_basis = date_basis or DATE_OPTIONS[0]
 
-    available_dates = result[date_basis].dropna().sort_values()
-    min_date = available_dates.min().date()
-    max_date = available_dates.max().date()
+    date_week_state = render_date_week_filters(result, date_basis)
+    if date_week_state is None:
+        return build_default_filter_state()
 
-    selected_start_date, selected_end_date = render_calendar_panel(min_date, max_date)
+    selected_start_date = date_week_state["selected_start_date"]
+    selected_end_date = date_week_state["selected_end_date"]
+    week_from = date_week_state["week_from"]
+    week_to = date_week_state["week_to"]
+    full_product_summary = date_week_state["full_product_summary"]
+    all_products = date_week_state["all_products"]
 
-    full_product_summary = summarize_products(result)
-    all_products = full_product_summary["Product Label"].tolist()
     st.markdown("###### Filtry produktowe")
     selected_products = st.multiselect(
         "Produkty",
         options=all_products,
-        default=all_products,
+        key="selected_products_filter",
     )
-    search_term = st.text_input("Szukaj po numerze lub opisie")
+    search_term = st.text_input("Szukaj po numerze lub opisie", key="analysis_search_term")
     st.markdown("###### Kierunek zmiany")
     selected_change_directions = st.segmented_control(
         "Kierunek zmiany",
@@ -3789,18 +4053,24 @@ def render_filters_panel(result):
         width="stretch",
     )
     selected_change_directions = selected_change_directions or ["Increase", "Decrease", "No Change"]
-    only_alerts = st.checkbox(f"Tylko alerty >= {THRESHOLD}%")
+    only_alerts = st.checkbox(f"Tylko alerty >= {THRESHOLD}%", key="analysis_only_alerts")
 
-    return {
-        "date_basis": date_basis,
-        "selected_start_date": selected_start_date,
-        "selected_end_date": selected_end_date,
-        "selected_products": selected_products,
-        "search_term": search_term,
-        "selected_change_directions": selected_change_directions,
-        "only_alerts": only_alerts,
-        "full_product_summary": full_product_summary,
-    }
+    filter_state = build_filter_state(
+        date_basis,
+        selected_start_date,
+        selected_end_date,
+        selected_products,
+        search_term,
+        selected_change_directions,
+        only_alerts,
+        full_product_summary,
+        week_from,
+        week_to,
+    )
+    preview_filtered = apply_analysis_filters(result, filter_state)
+    st.caption(format_active_filter_summary(filter_state))
+    st.caption(f"Liczba rekordów po filtracji: {len(preview_filtered):,}")
+    return filter_state
 
 
 def render_welcome_side_panel(prev_file, current_file):
@@ -6324,6 +6594,8 @@ def build_default_filter_state():
         "date_basis": DATE_OPTIONS[0],
         "selected_start_date": None,
         "selected_end_date": None,
+        "week_from": None,
+        "week_to": None,
         "selected_products": [],
         "search_term": "",
         "selected_change_directions": ["Increase", "Decrease", "No Change"],
@@ -6381,6 +6653,16 @@ def format_workspace_date_range(filter_state):
     return f"{start_label} - {end_label}"
 
 
+def format_workspace_week_range(filter_state):
+    if not isinstance(filter_state, dict):
+        return "Tygodnie nieustawione"
+    week_from = filter_state.get("week_from")
+    week_to = filter_state.get("week_to")
+    if not week_from or not week_to:
+        return "Tygodnie nieustawione"
+    return f"{week_from} - {week_to}"
+
+
 def build_workspace_context_cards(prev_meta, curr_meta, filter_state, filtered_df):
     items = [
         {"label": "Format", "value": describe_format_context(prev_meta, curr_meta)},
@@ -6389,6 +6671,10 @@ def build_workspace_context_cards(prev_meta, curr_meta, filter_state, filtered_d
         {
             "label": "Zakres",
             "value": format_workspace_date_range(filter_state),
+        },
+        {
+            "label": "Tygodnie",
+            "value": format_workspace_week_range(filter_state),
         },
         {"label": "Wiersze po filtrach", "value": f"{len(filtered_df):,}"},
     ]
@@ -6730,39 +7016,10 @@ search_term = filter_state["search_term"]
 selected_change_directions = filter_state["selected_change_directions"]
 only_alerts = filter_state["only_alerts"]
 
-filtered_df = result.copy()
-filtered_df = filtered_df[
-    filtered_df[date_basis].dt.date.between(
-        selected_start_date, selected_end_date
-    )
-]
+filtered_df = apply_analysis_filters(result, filter_state)
+st.session_state["filtered_data"] = filtered_df.copy()
 
-if selected_products:
-    filtered_df = filtered_df[filtered_df["Product Label"].isin(selected_products)]
-else:
-    filtered_df = filtered_df.iloc[0:0]
-
-if search_term.strip():
-    query = search_term.strip().lower()
-    filtered_df = filtered_df[
-        filtered_df["Part Number"].str.lower().str.contains(query, na=False)
-        | filtered_df["Part Description"].str.lower().str.contains(query, na=False)
-    ]
-
-planner_source = build_planner_scope_source(
-    result,
-    selected_start_date,
-    selected_end_date,
-    selected_products,
-    search_term,
-)
-
-filtered_df = filtered_df[
-    filtered_df["Change Direction"].isin(selected_change_directions)
-]
-
-if only_alerts:
-    filtered_df = filtered_df[filtered_df["Alert"]]
+planner_source = build_planner_scope_source(result, filter_state)
 
 product_summary = summarize_products(filtered_df)
 date_summary = summarize_dates(filtered_df, date_basis)
@@ -6830,6 +7087,7 @@ render_app_header(
         describe_format_context(prev_meta, curr_meta),
         f"PO {curr_meta.get('po_number', 'n/a')}",
         f"Zakres {format_workspace_date_range(filter_state)}",
+        f"Tygodnie {format_workspace_week_range(filter_state)}",
         f"Wiersze po filtrach: {len(filtered_df):,}",
     ],
     file_caption=curr_meta.get("file_name", ""),
