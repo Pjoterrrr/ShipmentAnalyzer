@@ -2058,20 +2058,43 @@ def render_chart_table_switch(
     chart_empty_message="Brak danych do wykresu.",
     table_empty_message="Brak danych źródłowych.",
     table_height=320,
+    chart_export_config=None,
 ):
+    export_state = get_chart_export_state(key, chart_export_config) if chart_export_config else {}
+    export_dataset = (
+        get_chart_export_dataset(key, source_df, export_state) if chart_export_config else pd.DataFrame()
+    )
+    export_bytes = (
+        build_excel_chart_workbook(key, export_dataset, export_state) if chart_export_config else None
+    )
+
     state_key = f"{key}_view_mode"
     st.session_state.setdefault(state_key, "chart")
-    selected_view = st.segmented_control(
-        "Widok sekcji",
-        options=["chart", "table"],
-        selection_mode="single",
-        default=st.session_state[state_key],
-        required=True,
-        key=state_key,
-        label_visibility="visible",
-        format_func=get_view_mode_label,
-        width="stretch",
-    )
+    controls_left, controls_right = st.columns([0.68, 0.32], gap="small")
+    with controls_left:
+        selected_view = st.segmented_control(
+            "Widok sekcji",
+            options=["chart", "table"],
+            selection_mode="single",
+            default=st.session_state[state_key],
+            required=True,
+            key=state_key,
+            label_visibility="visible",
+            format_func=get_view_mode_label,
+            width="stretch",
+        )
+    with controls_right:
+        if chart_export_config:
+            export_title = str(export_state.get("title", "chart_export")).strip() or "chart_export"
+            st.download_button(
+                "Eksportuj wykres do Excel",
+                data=export_bytes or b"",
+                file_name=f"{slugify_filename(export_title)}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key=f"{key}_excel_chart_export",
+                use_container_width=True,
+                disabled=not export_bytes,
+            )
     selected_view = selected_view or st.session_state[state_key]
 
     if selected_view == "chart":
@@ -2093,6 +2116,253 @@ def render_chart_table_switch(
         st.info(table_empty_message)
     else:
         st.dataframe(source_table, use_container_width=True, height=table_height)
+
+
+def slugify_filename(value):
+    normalized = "".join(
+        character.lower() if str(character).isalnum() else "_"
+        for character in str(value or "").strip()
+    )
+    normalized = "_".join(part for part in normalized.split("_") if part)
+    return normalized or "chart_export"
+
+
+def normalize_excel_export_table(dataframe):
+    if dataframe is None or dataframe.empty:
+        return pd.DataFrame()
+
+    export = dataframe.copy()
+    for column in export.columns:
+        if pd.api.types.is_datetime64_any_dtype(export[column]):
+            export[column] = pd.to_datetime(export[column], errors="coerce").dt.strftime("%Y-%m-%d")
+        elif pd.api.types.is_bool_dtype(export[column]):
+            export[column] = export[column].map(lambda value: "Tak" if value else "Nie")
+    return export
+
+
+def build_active_filter_export_summary():
+    filter_state = st.session_state.get("active_filters")
+    if not isinstance(filter_state, dict):
+        return "Pelny aktywny zakres danych"
+
+    summary_parts = [
+        f"Data: {format_workspace_date_range(filter_state)}",
+        f"Tygodnie: {format_workspace_week_range(filter_state)}",
+        f"Oś daty: {get_date_label(filter_state.get('date_basis', DATE_OPTIONS[0]))}",
+    ]
+    selected_products = filter_state.get("selected_products", [])
+    if selected_products:
+        summary_parts.append(f"Produkty: {len(selected_products)}")
+    search_term = str(filter_state.get("search_term", "")).strip()
+    if search_term:
+        summary_parts.append(f"Szukaj: {search_term}")
+    if bool(filter_state.get("only_alerts", False)):
+        summary_parts.append("Tylko alerty")
+    change_directions = filter_state.get("selected_change_directions", [])
+    if change_directions and len(change_directions) < len(CHANGE_DIRECTION_OPTIONS):
+        labels = ", ".join(get_change_label(direction) for direction in change_directions)
+        summary_parts.append(f"Kierunki: {labels}")
+    return " | ".join(summary_parts)
+
+
+def get_chart_export_state(chart_id, chart_export_config=None):
+    export_state = dict(chart_export_config or {})
+    export_state.setdefault("chart_id", chart_id)
+    export_state.setdefault("title", chart_id.replace("_", " ").title())
+    export_state.setdefault("filter_summary", build_active_filter_export_summary())
+    filtered_data = st.session_state.get("filtered_data")
+    filtered_record_count = (
+        len(filtered_data)
+        if isinstance(filtered_data, pd.DataFrame)
+        else int(export_state.get("filtered_record_count", 0) or 0)
+    )
+    export_state.setdefault("filtered_record_count", filtered_record_count)
+    export_state.setdefault(
+        "generated_at",
+        pd.Timestamp.now(tz="Europe/Warsaw").strftime("%Y-%m-%d %H:%M:%S %Z"),
+    )
+    return export_state
+
+
+def get_chart_export_dataset(chart_id, filtered_data, state):
+    dataset = state.get("dataset", filtered_data)
+    if callable(dataset):
+        dataset = dataset()
+    if dataset is None:
+        return pd.DataFrame()
+    if isinstance(dataset, pd.DataFrame):
+        return dataset.copy()
+    return pd.DataFrame(dataset)
+
+
+def build_matrix_chart_export_table(source_df, value_label, label_columns=None):
+    if source_df is None or source_df.empty:
+        return pd.DataFrame(columns=["Date", value_label])
+
+    label_columns = tuple(label_columns or ("Part Number", "Part Description"))
+    value_columns = [column for column in source_df.columns if column not in label_columns]
+    totals = [
+        {
+            "Date": str(column),
+            value_label: float(pd.to_numeric(source_df[column], errors="coerce").fillna(0).sum()),
+        }
+        for column in value_columns
+    ]
+    return pd.DataFrame(totals)
+
+
+def prepare_chart_export_plot_table(source_df, state):
+    if source_df is None or source_df.empty:
+        return pd.DataFrame()
+
+    builder = str(state.get("builder", "identity")).strip().lower()
+    if builder == "matrix_totals":
+        value_label = (state.get("series_columns") or ["Value"])[0]
+        return build_matrix_chart_export_table(
+            source_df,
+            value_label=value_label,
+            label_columns=state.get("label_columns"),
+        )
+
+    category_column = state.get("category_column")
+    series_columns = list(state.get("series_columns") or [])
+    selected_columns = [column for column in [category_column, *series_columns] if column in source_df.columns]
+    if not selected_columns:
+        return source_df.copy()
+    return source_df[selected_columns].copy()
+
+
+def add_excel_chart_export_data(data_sheet, raw_export_df, chart_export_df):
+    if raw_export_df.empty:
+        return None
+
+    helper_start_col = raw_export_df.shape[1] + 3
+    for column_offset, column_name in enumerate(chart_export_df.columns, start=0):
+        data_sheet.cell(row=1, column=helper_start_col + column_offset, value=column_name)
+    for row_offset, row in enumerate(chart_export_df.itertuples(index=False), start=2):
+        for column_offset, value in enumerate(row, start=0):
+            data_sheet.cell(row=row_offset, column=helper_start_col + column_offset, value=value)
+
+    for column_offset in range(chart_export_df.shape[1]):
+        data_sheet.column_dimensions[get_column_letter(helper_start_col + column_offset)].hidden = True
+
+    return helper_start_col
+
+
+def build_excel_native_chart(data_sheet, helper_start_col, chart_export_df, state):
+    if chart_export_df is None or chart_export_df.empty or helper_start_col is None:
+        return None
+
+    chart_type = str(state.get("chart_type", "line")).strip().lower()
+    category_label = chart_export_df.columns[0]
+    series_columns = list(chart_export_df.columns[1:])
+    if not series_columns:
+        return None
+
+    if chart_type == "line":
+        chart = LineChart()
+    else:
+        chart = BarChart()
+        chart.type = "bar" if chart_type == "bar" else "col"
+        if state.get("stacked"):
+            chart.grouping = "stacked"
+
+    chart.style = 10
+    chart.title = state.get("title", "Chart export")
+    chart.height = float(state.get("height", 8.5))
+    chart.width = float(state.get("width", 18))
+    chart.x_axis.title = state.get("x_axis_title", category_label)
+    chart.y_axis.title = state.get("y_axis_title", series_columns[0])
+
+    data_reference = Reference(
+        data_sheet,
+        min_col=helper_start_col + 1,
+        max_col=helper_start_col + len(series_columns),
+        min_row=1,
+        max_row=1 + len(chart_export_df),
+    )
+    category_reference = Reference(
+        data_sheet,
+        min_col=helper_start_col,
+        min_row=2,
+        max_row=1 + len(chart_export_df),
+    )
+    chart.add_data(data_reference, titles_from_data=True)
+    chart.set_categories(category_reference)
+    chart.legend.position = "r"
+    return chart
+
+
+def build_chart_export_metadata(chart_id, chart_title, chart_dataset, plot_dataset, state):
+    return [
+        ("Nazwa wykresu", chart_title),
+        ("Chart ID", chart_id),
+        ("Aktywne filtry", state.get("filter_summary", "n/a")),
+        ("Wiersze po filtracji", state.get("filtered_record_count", 0)),
+        ("Wiersze datasetu wykresu", len(chart_dataset)),
+        ("Wiersze danych wykresu Excel", len(plot_dataset)),
+        ("Wygenerowano", state.get("generated_at", "")),
+    ]
+
+
+def write_chart_export_metadata(worksheet, metadata_rows, title):
+    worksheet.merge_cells("A1:F1")
+    worksheet["A1"] = title
+    worksheet["A1"].font = Font(size=16, bold=True, color="0F172A")
+    worksheet["A1"].alignment = Alignment(horizontal="left", vertical="center")
+
+    worksheet["A3"] = "Metadane eksportu"
+    worksheet["A3"].font = Font(size=13, bold=True, color="0F172A")
+    for row_offset, (label, value) in enumerate(metadata_rows, start=4):
+        worksheet.cell(row=row_offset, column=1, value=label)
+        worksheet.cell(row=row_offset, column=2, value=value)
+        worksheet.cell(row=row_offset, column=1).font = Font(bold=True, color="334155")
+        worksheet.cell(row=row_offset, column=1).fill = PatternFill(fill_type="solid", fgColor="E2E8F0")
+        worksheet.cell(row=row_offset, column=1).alignment = Alignment(horizontal="left", vertical="center")
+        worksheet.cell(row=row_offset, column=2).alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    worksheet.column_dimensions["A"].width = 24
+    worksheet.column_dimensions["B"].width = 88
+
+
+def build_excel_chart_workbook(chart_id, filtered_data, state):
+    chart_dataset = get_chart_export_dataset(chart_id, filtered_data, state)
+    if chart_dataset is None or chart_dataset.empty:
+        return None
+
+    chart_export_df = prepare_chart_export_plot_table(chart_dataset, state)
+    if chart_export_df.empty or chart_export_df.shape[1] < 2:
+        return None
+
+    raw_export_df = normalize_excel_export_table(chart_dataset)
+    chart_export_df = normalize_excel_export_table(chart_export_df)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        raw_export_df.to_excel(writer, sheet_name="Data", index=False)
+        pd.DataFrame().to_excel(writer, sheet_name="Chart", index=False)
+
+        data_sheet = writer.book["Data"]
+        style_excel_header(data_sheet, 1)
+        style_table_region(data_sheet, 1)
+        data_sheet.freeze_panes = "A2"
+        data_sheet.auto_filter.ref = data_sheet.dimensions
+        autosize_worksheet(data_sheet)
+        ensure_numeric_cells_black(data_sheet, start_row=2)
+
+        helper_start_col = add_excel_chart_export_data(data_sheet, raw_export_df, chart_export_df)
+        chart_sheet = writer.book["Chart"]
+        metadata_rows = build_chart_export_metadata(
+            chart_id,
+            state.get("title", chart_id),
+            raw_export_df,
+            chart_export_df,
+            state,
+        )
+        write_chart_export_metadata(chart_sheet, metadata_rows, state.get("title", chart_id))
+        excel_chart = build_excel_native_chart(data_sheet, helper_start_col, chart_export_df, state)
+        if excel_chart is not None:
+            chart_sheet.add_chart(excel_chart, "A12")
+
+    return output.getvalue()
 
 
 def render_meta_card(title, body_lines):

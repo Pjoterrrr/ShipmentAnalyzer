@@ -87,6 +87,15 @@ def render(data, ui):
         ui.build_quantity_chart(date_summary, ui.get_date_label(date_basis)),
         date_summary,
         table_height=360,
+        chart_export_config={
+            "title": "Dashboard - Release trend",
+            "dataset": date_summary,
+            "chart_type": "line",
+            "category_column": "Analysis Date",
+            "series_columns": ["Quantity_Prev", "Quantity_Curr"],
+            "x_axis_title": ui.get_date_label(date_basis),
+            "y_axis_title": "Ilosc otwarta",
+        },
     )
 
     trend_left, trend_right = st.columns([1.15, 0.85], gap="large")
@@ -101,6 +110,15 @@ def render(data, ui):
             ui.build_delta_chart(date_summary, ui.get_date_label(date_basis)),
             date_summary,
             table_height=320,
+            chart_export_config={
+                "title": "Dashboard - Delta over time",
+                "dataset": date_summary,
+                "chart_type": "column",
+                "category_column": "Analysis Date",
+                "series_columns": ["Delta"],
+                "x_axis_title": ui.get_date_label(date_basis),
+                "y_axis_title": "Zmiana ilosci",
+            },
         )
     with trend_right:
         ui.render_section_header(
@@ -113,6 +131,15 @@ def render(data, ui):
             ui.build_change_mix_chart(filtered_df),
             ui.build_change_mix_source(filtered_df),
             table_height=240,
+            chart_export_config={
+                "title": "Dashboard - Change mix",
+                "dataset": ui.build_change_mix_source(filtered_df),
+                "chart_type": "bar",
+                "category_column": "Direction Label",
+                "series_columns": ["Rows"],
+                "x_axis_title": "Liczba pozycji",
+                "y_axis_title": "Kierunek zmiany",
+            },
         )
 
     waterfall_left, waterfall_right = st.columns([1.25, 0.75], gap="large")
@@ -137,6 +164,15 @@ def render(data, ui):
                 waterfall_chart,
                 waterfall_source,
                 table_height=320,
+                chart_export_config={
+                    "title": "Dashboard - Top product deltas",
+                    "dataset": waterfall_source,
+                    "chart_type": "column",
+                    "category_column": "Part Number",
+                    "series_columns": ["Delta"],
+                    "x_axis_title": "Part Number",
+                    "y_axis_title": "Delta wolumenu",
+                },
             )
     with waterfall_right:
         ui.render_section_header(
@@ -152,6 +188,15 @@ def render(data, ui):
             weekly_preview,
             chart_empty_message="Brak danych tygodniowych do wykresu.",
             table_height=320,
+            chart_export_config={
+                "title": "Dashboard - Weekly quantity comparison",
+                "dataset": weekly_summary,
+                "chart_type": "line",
+                "category_column": "Week Label",
+                "series_columns": ["Quantity_Prev", "Quantity_Curr"],
+                "x_axis_title": "Tydzien ISO",
+                "y_axis_title": "Wolumen tygodniowy",
+            },
         )
 
     increase_chart, increase_title = ui.build_product_bar_chart(product_summary, "increase")
@@ -168,6 +213,15 @@ def render(data, ui):
                 increase_chart,
                 ui.build_product_bar_source(product_summary, "increase"),
                 table_height=340,
+                chart_export_config={
+                    "title": "Dashboard - Top product increases",
+                    "dataset": ui.build_product_bar_source(product_summary, "increase"),
+                    "chart_type": "bar",
+                    "category_column": "Part Number",
+                    "series_columns": ["Delta"],
+                    "x_axis_title": "Zmiana ilosci",
+                    "y_axis_title": "Part Number",
+                },
             )
 
     with dashboard_right:
@@ -180,6 +234,15 @@ def render(data, ui):
                 decrease_chart,
                 ui.build_product_bar_source(product_summary, "decrease"),
                 table_height=340,
+                chart_export_config={
+                    "title": "Dashboard - Top product declines",
+                    "dataset": ui.build_product_bar_source(product_summary, "decrease"),
+                    "chart_type": "bar",
+                    "category_column": "Part Number",
+                    "series_columns": ["Delta"],
+                    "x_axis_title": "Zmiana ilosci",
+                    "y_axis_title": "Part Number",
+                },
             )
 
     ui.render_section_header(

@@ -347,6 +347,15 @@ def render(data, ui):
             weekly_report,
             chart_empty_message="Brak danych tygodniowych dla aktywnego zakresu.",
             table_height=420,
+            chart_export_config={
+                "title": "Reports - Weekly quantity comparison",
+                "dataset": weekly_report,
+                "chart_type": "line",
+                "category_column": "Week Label",
+                "series_columns": ["Previous Release Qty", "Current Release Qty"],
+                "x_axis_title": "Tydzien ISO",
+                "y_axis_title": "Wolumen tygodniowy",
+            },
         )
         return
 
@@ -364,6 +373,16 @@ def render(data, ui):
             delta_report,
             chart_empty_message="Brak danych do delta heat map dla aktywnego zakresu.",
             table_height=520,
+            chart_export_config={
+                "title": "Reports - Delta heat map",
+                "dataset": delta_report,
+                "chart_type": "column",
+                "builder": "matrix_totals",
+                "label_columns": ["Part Number", "Part Description"],
+                "series_columns": ["Release Delta"],
+                "x_axis_title": "Data",
+                "y_axis_title": "Suma delty",
+            },
         )
         return
 
@@ -381,6 +400,16 @@ def render(data, ui):
             current_matrix_report,
             chart_empty_message="Brak danych do current matrix dla aktywnego zakresu.",
             table_height=520,
+            chart_export_config={
+                "title": "Reports - Current matrix",
+                "dataset": current_matrix_report,
+                "chart_type": "column",
+                "builder": "matrix_totals",
+                "label_columns": ["Part Number", "Part Description"],
+                "series_columns": ["Current Release Qty"],
+                "x_axis_title": "Data",
+                "y_axis_title": "Aktualny wolumen",
+            },
         )
         return
 
@@ -396,4 +425,13 @@ def render(data, ui):
         report_dataset["operational_calendar"],
         chart_empty_message="Brak danych kalendarzowych dla aktywnego zakresu.",
         table_height=520,
+        chart_export_config={
+            "title": "Reports - Polish operational calendar",
+            "dataset": report_dataset["calendar_summary"],
+            "chart_type": "column",
+            "category_column": "ISO Week Label",
+            "series_columns": ["Working_Days_PL", "Saturdays", "Polish_Holidays"],
+            "x_axis_title": "Tydzien ISO",
+            "y_axis_title": "Liczba dni",
+        },
     )
