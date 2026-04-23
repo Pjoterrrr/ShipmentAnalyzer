@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pandas as pd
 from openpyxl import load_workbook
+from openpyxl.chart import BarChart, LineChart, Reference
 from openpyxl.drawing.image import Image as OpenpyxlImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
@@ -40,6 +41,17 @@ def load_export_functions() -> dict[str, object]:
         "decorate_delta_column",
         "excel_fill_color",
         "ensure_numeric_cells_black",
+        "build_weekly_comparison_export",
+        "build_report_matrix_export",
+        "build_matrix_totals_export",
+        "build_calendar_operational_export",
+        "build_calendar_weekly_export",
+        "add_weekly_comparison_chart",
+        "add_totals_chart",
+        "add_calendar_summary_chart",
+        "style_table_region",
+        "apply_number_formats",
+        "style_multi_label_matrix_sheet",
         "apply_polish_calendar_highlights",
         "style_matrix_sheet",
         "highlight_calendar_rows",
@@ -57,8 +69,11 @@ def load_export_functions() -> dict[str, object]:
         "OpenpyxlImage": OpenpyxlImage,
         "Alignment": Alignment,
         "Border": Border,
+        "BarChart": BarChart,
         "Font": Font,
+        "LineChart": LineChart,
         "PatternFill": PatternFill,
+        "Reference": Reference,
         "Side": Side,
         "get_column_letter": get_column_letter,
         "build_calendar_frame": build_calendar_frame,
@@ -82,7 +97,7 @@ class ExcelExportTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.export_functions = load_export_functions()
 
-    def test_excel_export_contains_weekly_and_calendar_sheets_with_black_numbers(self) -> None:
+    def test_excel_export_contains_filtered_report_sheets_and_charts(self) -> None:
         detail_df = pd.DataFrame(
             [
                 {
@@ -173,18 +188,10 @@ class ExcelExportTests(unittest.TestCase):
         )
 
         workbook = load_workbook(io.BytesIO(excel_bytes))
-        self.assertIn("Weekly Summary", workbook.sheetnames)
+        self.assertIn("Weekly Comparison", workbook.sheetnames)
         self.assertIn("Calendar PL", workbook.sheetnames)
-
-        detail_sheet = workbook["Detailed Data"]
-        header_map = {cell.value: cell.column for cell in detail_sheet[1]}
-        quantity_curr_cell = detail_sheet.cell(row=2, column=header_map["Quantity_Curr"])
-        ship_date_row_2 = detail_sheet.cell(row=2, column=header_map["Ship Date"])
-        ship_date_row_3 = detail_sheet.cell(row=3, column=header_map["Ship Date"])
-
-        self.assertEqual(rgb_suffix(quantity_curr_cell.font.color.rgb), "000000")
-        self.assertEqual(rgb_suffix(ship_date_row_2.fill.fgColor.rgb), "FEF3C7")
-        self.assertEqual(rgb_suffix(ship_date_row_3.fill.fgColor.rgb), "DBEAFE")
+        self.assertIn("Current Matrix", workbook.sheetnames)
+        self.assertIn("Delta Heatmap", workbook.sheetnames)
 
         calendar_sheet = workbook["Calendar PL"]
         calendar_rows = {
@@ -195,11 +202,18 @@ class ExcelExportTests(unittest.TestCase):
         may_third_row = calendar_rows["2026-05-03"]
         self.assertEqual(rgb_suffix(calendar_sheet.cell(row=may_first_row, column=1).fill.fgColor.rgb), "FEF3C7")
         self.assertEqual(rgb_suffix(calendar_sheet.cell(row=may_third_row, column=1).fill.fgColor.rgb), "FEF3C7")
+        self.assertGreaterEqual(len(calendar_sheet._charts), 1)
 
-        weekly_sheet = workbook["Weekly Summary"]
+        weekly_sheet = workbook["Weekly Comparison"]
         weekly_header = {cell.value: cell.column for cell in weekly_sheet[1]}
         current_release_cell = weekly_sheet.cell(row=2, column=weekly_header["Current Release Qty"])
         self.assertEqual(rgb_suffix(current_release_cell.font.color.rgb), "000000")
+        self.assertGreaterEqual(len(weekly_sheet._charts), 1)
+
+        current_matrix_sheet = workbook["Current Matrix"]
+        delta_heatmap_sheet = workbook["Delta Heatmap"]
+        self.assertGreaterEqual(len(current_matrix_sheet._charts), 1)
+        self.assertGreaterEqual(len(delta_heatmap_sheet._charts), 1)
 
 
 if __name__ == "__main__":

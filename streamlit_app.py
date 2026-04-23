@@ -2696,7 +2696,7 @@ def render_extended_export_actions(csv_bytes, excel_bytes, professional_excel_by
     render_section_header(
         "Eksport",
         "Pobierz wyniki",
-        "Pobierz dane CSV, standardowy raport Excel albo nowy raport Weekly by Part.",
+        "Pobierz dane CSV, uproszczony pakiet raportowy Excel albo specjalistyczny raport Weekly by Part.",
     )
     download_left, download_center, download_right = st.columns(3, gap="small")
     with download_left:
@@ -2709,9 +2709,9 @@ def render_extended_export_actions(csv_bytes, excel_bytes, professional_excel_by
         )
     with download_center:
         st.download_button(
-            "Pobierz raport Excel",
+            "Pobierz Reports Pack Excel",
             data=excel_bytes,
-            file_name="pjoter_development_release_change_report.xlsx",
+            file_name="pjoter_development_reports_pack.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
         )
@@ -6320,6 +6320,265 @@ def write_summary_sheet(
     autosize_worksheet(worksheet)
 
 
+def build_weekly_comparison_export(weekly_summary):
+    if weekly_summary is None or weekly_summary.empty:
+        return pd.DataFrame(
+            columns=[
+                "Week Label",
+                "Week Start",
+                "Week End",
+                "Working Days PL",
+                "Polish Holidays",
+                "Weekend Days",
+                "Previous Release Qty",
+                "Current Release Qty",
+                "Release Delta",
+                "Release Change %",
+                "Previous Week Qty",
+                "WoW Delta",
+                "WoW Change %",
+                "Trend",
+                "Holiday Week",
+                "Week Status",
+            ]
+        )
+
+    export = weekly_summary[
+        [
+            "Week Label",
+            "Week Start",
+            "Week End",
+            "Working_Days_PL",
+            "Holidays_PL",
+            "Weekend_Days",
+            "Quantity_Prev",
+            "Quantity_Curr",
+            "Delta",
+            "Release Percent Label",
+            "Previous Week Current Qty",
+            "WoW Delta",
+            "WoW Percent Label",
+            "Week Status",
+        ]
+    ].copy()
+    export["Trend"] = export["WoW Delta"].map(
+        lambda value: "Wzrost" if float(value or 0) > 0 else "Spadek" if float(value or 0) < 0 else "Stabilnie"
+    )
+    export["Holiday Week"] = export["Holidays_PL"].map(lambda value: "Tak" if int(value or 0) > 0 else "")
+    export["Week Start"] = pd.to_datetime(export["Week Start"], errors="coerce").dt.strftime("%Y-%m-%d")
+    export["Week End"] = pd.to_datetime(export["Week End"], errors="coerce").dt.strftime("%Y-%m-%d")
+    export["Release Percent Label"] = export["Release Percent Label"].map(format_percent_display)
+    export["WoW Percent Label"] = export["WoW Percent Label"].map(format_percent_display)
+    export = export.rename(
+        columns={
+            "Working_Days_PL": "Working Days PL",
+            "Holidays_PL": "Polish Holidays",
+            "Weekend_Days": "Weekend Days",
+            "Quantity_Prev": "Previous Release Qty",
+            "Quantity_Curr": "Current Release Qty",
+            "Delta": "Release Delta",
+            "Release Percent Label": "Release Change %",
+            "Previous Week Current Qty": "Previous Week Qty",
+            "WoW Percent Label": "WoW Change %",
+        }
+    )
+    return export
+
+
+def build_report_matrix_export(matrix_df):
+    if matrix_df is None or matrix_df.empty:
+        return pd.DataFrame(columns=["Part Number", "Part Description"])
+
+    export = matrix_df.reset_index()
+    first_column = export.columns[0]
+    export = export.rename(columns={first_column: "Product Label"})
+    label_parts = export["Product Label"].astype(str).str.split(" | ", n=1, regex=False, expand=True)
+    part_numbers = label_parts[0].fillna(export["Product Label"])
+    part_descriptions = label_parts[1].fillna("") if 1 in label_parts.columns else ""
+    export.insert(0, "Part Number", part_numbers)
+    export.insert(1, "Part Description", part_descriptions)
+    export = export.drop(columns=["Product Label"])
+    return export
+
+
+def build_matrix_totals_export(matrix_export_df, metric_label):
+    if matrix_export_df is None or matrix_export_df.empty:
+        return pd.DataFrame(columns=["Date", metric_label])
+
+    value_columns = [
+        column for column in matrix_export_df.columns if column not in {"Part Number", "Part Description"}
+    ]
+    totals = [
+        {
+            "Date": column,
+            metric_label: float(pd.to_numeric(matrix_export_df[column], errors="coerce").fillna(0).sum()),
+        }
+        for column in value_columns
+    ]
+    return pd.DataFrame(totals)
+
+
+def build_calendar_operational_export(selected_start_date, selected_end_date):
+    calendar_export = build_calendar_frame(selected_start_date, selected_end_date).copy()
+    if calendar_export.empty:
+        return pd.DataFrame()
+
+    calendar_export["Date"] = pd.to_datetime(calendar_export["Date"]).dt.strftime("%Y-%m-%d")
+    calendar_export["Week Start"] = pd.to_datetime(calendar_export["Week Start"]).dt.strftime("%Y-%m-%d")
+    calendar_export["Week End"] = pd.to_datetime(calendar_export["Week End"]).dt.strftime("%Y-%m-%d")
+    return calendar_export[
+        [
+            "Date",
+            "Day Name",
+            "Day Type",
+            "Holiday Name",
+            "ISO Week Label",
+            "Week Start",
+            "Week End",
+            "Is Working Day",
+            "Is Weekend",
+            "Is Holiday",
+        ]
+    ]
+
+
+def build_calendar_weekly_export(calendar_export):
+    if calendar_export is None or calendar_export.empty:
+        return pd.DataFrame(
+            columns=["ISO Week Label", "Working Days PL", "Saturdays", "Sundays", "Polish Holidays"]
+        )
+
+    weekly = (
+        calendar_export.groupby(["ISO Week Label", "Week Start", "Week End"], as_index=False)
+        .agg(
+            **{
+                "Working Days PL": ("Is Working Day", "sum"),
+                "Saturdays": ("Day Type", lambda values: int((pd.Series(values) == "Saturday").sum())),
+                "Sundays": ("Day Type", lambda values: int((pd.Series(values) == "Sunday").sum())),
+                "Polish Holidays": ("Is Holiday", "sum"),
+            }
+        )
+        .sort_values(["Week Start", "Week End"])
+        .reset_index(drop=True)
+    )
+    return weekly
+
+
+def add_weekly_comparison_chart(worksheet, header_row=1, anchor_cell="M2"):
+    headers = {cell.value: cell.column for cell in worksheet[header_row]}
+    week_column = headers.get("Week Label")
+    previous_column = headers.get("Previous Release Qty")
+    current_column = headers.get("Current Release Qty")
+    if week_column is None or previous_column is None or current_column is None or worksheet.max_row <= header_row:
+        return
+
+    chart = LineChart()
+    chart.title = "Weekly quantity comparison"
+    chart.y_axis.title = "Qty"
+    chart.x_axis.title = "Week"
+    chart.height = 8.5
+    chart.width = 18
+    data = Reference(
+        worksheet,
+        min_col=previous_column,
+        max_col=current_column,
+        min_row=header_row,
+        max_row=worksheet.max_row,
+    )
+    categories = Reference(
+        worksheet,
+        min_col=week_column,
+        min_row=header_row + 1,
+        max_row=worksheet.max_row,
+    )
+    chart.add_data(data, titles_from_data=True)
+    chart.set_categories(categories)
+    worksheet.add_chart(chart, anchor_cell)
+
+
+def add_totals_chart(worksheet, totals_df, *, value_label, title, anchor_cell="L2"):
+    if totals_df is None or totals_df.empty:
+        return
+
+    helper_col = worksheet.max_column + 3
+    worksheet.cell(row=2, column=helper_col, value="Date")
+    worksheet.cell(row=2, column=helper_col + 1, value=value_label)
+    for index, row in enumerate(totals_df.itertuples(index=False), start=3):
+        worksheet.cell(row=index, column=helper_col, value=row[0])
+        worksheet.cell(row=index, column=helper_col + 1, value=float(row[1]))
+
+    chart = BarChart()
+    chart.type = "col"
+    chart.style = 10
+    chart.title = title
+    chart.y_axis.title = value_label
+    chart.x_axis.title = "Date"
+    chart.height = 8.5
+    chart.width = 18
+    data = Reference(
+        worksheet,
+        min_col=helper_col + 1,
+        max_col=helper_col + 1,
+        min_row=2,
+        max_row=2 + len(totals_df),
+    )
+    categories = Reference(
+        worksheet,
+        min_col=helper_col,
+        min_row=3,
+        max_row=2 + len(totals_df),
+    )
+    chart.add_data(data, titles_from_data=True)
+    chart.set_categories(categories)
+    worksheet.add_chart(chart, anchor_cell)
+
+    worksheet.column_dimensions[get_column_letter(helper_col)].hidden = True
+    worksheet.column_dimensions[get_column_letter(helper_col + 1)].hidden = True
+
+
+def add_calendar_summary_chart(worksheet, calendar_weekly_df, anchor_cell="L2"):
+    if calendar_weekly_df is None or calendar_weekly_df.empty:
+        return
+
+    helper_col = worksheet.max_column + 3
+    headers = ["ISO Week Label", "Working Days PL", "Saturdays", "Polish Holidays"]
+    for offset, header in enumerate(headers):
+        worksheet.cell(row=2, column=helper_col + offset, value=header)
+    for index, row in enumerate(calendar_weekly_df.itertuples(index=False), start=3):
+        worksheet.cell(row=index, column=helper_col, value=row[0])
+        worksheet.cell(row=index, column=helper_col + 1, value=int(row[3]))
+        worksheet.cell(row=index, column=helper_col + 2, value=int(row[4]))
+        worksheet.cell(row=index, column=helper_col + 3, value=int(row[6]))
+
+    chart = BarChart()
+    chart.type = "col"
+    chart.style = 10
+    chart.title = "Operational calendar summary"
+    chart.y_axis.title = "Days"
+    chart.x_axis.title = "ISO Week"
+    chart.height = 8.5
+    chart.width = 18
+    data = Reference(
+        worksheet,
+        min_col=helper_col + 1,
+        max_col=helper_col + 3,
+        min_row=2,
+        max_row=2 + len(calendar_weekly_df),
+    )
+    categories = Reference(
+        worksheet,
+        min_col=helper_col,
+        min_row=3,
+        max_row=2 + len(calendar_weekly_df),
+    )
+    chart.add_data(data, titles_from_data=True)
+    chart.set_categories(categories)
+    worksheet.add_chart(chart, anchor_cell)
+
+    for offset in range(len(headers)):
+        worksheet.column_dimensions[get_column_letter(helper_col + offset)].hidden = True
+
+
 def to_excel_bytes(
     detail_df,
     weekly_summary,
@@ -6334,118 +6593,78 @@ def to_excel_bytes(
     key_findings,
 ):
     output = io.BytesIO()
-    detail_export = detail_df.copy()
-    detail_export["Ship Date"] = detail_export["Ship Date"].dt.strftime("%Y-%m-%d")
-    detail_export["Receipt Date"] = detail_export["Receipt Date"].dt.strftime("%Y-%m-%d")
-    weekly_export = weekly_summary[
-        [
-            "Week Label",
-            "Week Start",
-            "Week End",
-            "Week Status",
-            "Working_Days_PL",
-            "Holidays_PL",
-            "Weekend_Days",
-            "Products",
-            "Quantity_Prev",
-            "Quantity_Curr",
-            "Delta",
-            "Release Percent Label",
-            "Previous Week Current Qty",
-            "WoW Delta",
-            "WoW Percent Label",
-            "Avg Current / Working Day",
-            "Release Alert",
-            "WoW Alert",
-            "Any Weekly Alert",
-            "Is Reference Week",
-        ]
-    ].copy()
-    weekly_export["Week Start"] = pd.to_datetime(weekly_export["Week Start"]).dt.strftime("%Y-%m-%d")
-    weekly_export["Week End"] = pd.to_datetime(weekly_export["Week End"]).dt.strftime("%Y-%m-%d")
-    weekly_export["Release Percent Label"] = weekly_export["Release Percent Label"].map(format_percent_display)
-    weekly_export["WoW Percent Label"] = weekly_export["WoW Percent Label"].map(format_percent_display)
-    weekly_export = weekly_export.rename(
-        columns={
-            "Working_Days_PL": "Working Days PL",
-            "Holidays_PL": "Polish Holidays",
-            "Weekend_Days": "Weekend Days",
-            "Quantity_Prev": "Previous Release Qty",
-            "Quantity_Curr": "Current Release Qty",
-            "Release Percent Label": "Release Change %",
-            "Previous Week Current Qty": "Previous Week Current Qty",
-            "WoW Percent Label": "WoW Change %",
-            "Avg Current / Working Day": "Current / Working Day",
-        }
-    )
-    calendar_export = build_calendar_frame(selected_start_date, selected_end_date).copy()
-    calendar_export["Date"] = pd.to_datetime(calendar_export["Date"]).dt.strftime("%Y-%m-%d")
-    calendar_export["Week Start"] = pd.to_datetime(calendar_export["Week Start"]).dt.strftime("%Y-%m-%d")
-    calendar_export["Week End"] = pd.to_datetime(calendar_export["Week End"]).dt.strftime("%Y-%m-%d")
-    current_matrix_export = current_matrix_df.reset_index()
-    delta_matrix_export = delta_matrix_df.reset_index()
+    weekly_export = build_weekly_comparison_export(weekly_summary)
+    calendar_export = build_calendar_operational_export(selected_start_date, selected_end_date)
+    calendar_weekly_export = build_calendar_weekly_export(calendar_export)
+    current_matrix_export = build_report_matrix_export(current_matrix_df)
+    delta_matrix_export = build_report_matrix_export(delta_matrix_df)
+    current_totals_export = build_matrix_totals_export(current_matrix_export, "Current Release Qty")
+    delta_totals_export = build_matrix_totals_export(delta_matrix_export, "Release Delta")
 
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        pd.DataFrame().to_excel(writer, sheet_name="Executive Summary", index=False)
-        detail_export.to_excel(writer, sheet_name="Detailed Data", index=False)
-        weekly_export.to_excel(writer, sheet_name="Weekly Summary", index=False)
+        weekly_export.to_excel(writer, sheet_name="Weekly Comparison", index=False)
         calendar_export.to_excel(writer, sheet_name="Calendar PL", index=False)
         current_matrix_export.to_excel(writer, sheet_name="Current Matrix", index=False)
         delta_matrix_export.to_excel(writer, sheet_name="Delta Heatmap", index=False)
 
-        summary_sheet = writer.book["Executive Summary"]
-        write_summary_sheet(
-            summary_sheet,
-            prev_meta,
-            curr_meta,
-            detail_df,
-            product_summary,
-            weekly_summary,
-            date_basis,
-            selected_start_date,
-            selected_end_date,
-            key_findings,
-        )
-
-        detail_sheet = writer.book["Detailed Data"]
-        style_excel_header(detail_sheet, 1)
-        decorate_delta_column(detail_sheet, header_row=1)
-        apply_polish_calendar_highlights(detail_sheet, ["Ship Date", "Receipt Date"], header_row=1)
-        detail_sheet.freeze_panes = "A2"
-        autosize_worksheet(detail_sheet)
-        ensure_numeric_cells_black(detail_sheet, start_row=2)
-
-        weekly_sheet = writer.book["Weekly Summary"]
+        weekly_sheet = writer.book["Weekly Comparison"]
         style_excel_header(weekly_sheet, 1)
-        highlight_weekly_rows(weekly_sheet, header_row=1)
-        decorate_delta_column(weekly_sheet, header_row=1)
+        style_table_region(weekly_sheet, 1)
+        apply_number_formats(
+            weekly_sheet,
+            1,
+            {
+                "Previous Release Qty": '#,##0',
+                "Current Release Qty": '#,##0',
+                "Release Delta": '#,##0',
+                "Previous Week Qty": '#,##0',
+                "WoW Delta": '#,##0',
+            },
+        )
         weekly_sheet.freeze_panes = "A2"
+        weekly_sheet.auto_filter.ref = weekly_sheet.dimensions
         autosize_worksheet(weekly_sheet)
         ensure_numeric_cells_black(weekly_sheet, start_row=2)
+        add_weekly_comparison_chart(weekly_sheet)
 
         calendar_sheet = writer.book["Calendar PL"]
         style_excel_header(calendar_sheet, 1)
+        style_table_region(calendar_sheet, 1)
         highlight_calendar_rows(calendar_sheet, header_row=1)
         apply_polish_calendar_highlights(calendar_sheet, ["Date"], header_row=1)
         calendar_sheet.freeze_panes = "A2"
+        calendar_sheet.auto_filter.ref = calendar_sheet.dimensions
         autosize_worksheet(calendar_sheet)
         ensure_numeric_cells_black(calendar_sheet, start_row=2)
+        add_calendar_summary_chart(calendar_sheet, calendar_weekly_export)
 
         current_matrix_sheet = writer.book["Current Matrix"]
         style_excel_header(current_matrix_sheet, 1)
-        current_matrix_sheet.freeze_panes = "B2"
+        current_matrix_sheet.freeze_panes = "C2"
+        current_matrix_sheet.auto_filter.ref = current_matrix_sheet.dimensions
         autosize_worksheet(current_matrix_sheet)
-        style_matrix_sheet(current_matrix_sheet, "Current Quantity")
+        style_multi_label_matrix_sheet(current_matrix_sheet, "Current Quantity", header_row=1, start_col=3, label_columns=(1, 2))
         ensure_numeric_cells_black(current_matrix_sheet, start_row=2)
+        add_totals_chart(
+            current_matrix_sheet,
+            current_totals_export,
+            value_label="Current Release Qty",
+            title="Current quantity by date",
+        )
 
         delta_heatmap_sheet = writer.book["Delta Heatmap"]
         style_excel_header(delta_heatmap_sheet, 1)
-        delta_heatmap_sheet.freeze_panes = "B2"
+        delta_heatmap_sheet.freeze_panes = "C2"
+        delta_heatmap_sheet.auto_filter.ref = delta_heatmap_sheet.dimensions
         autosize_worksheet(delta_heatmap_sheet)
-        style_matrix_sheet(delta_heatmap_sheet, "Delta")
+        style_multi_label_matrix_sheet(delta_heatmap_sheet, "Delta", header_row=1, start_col=3, label_columns=(1, 2))
         ensure_numeric_cells_black(delta_heatmap_sheet, start_row=2)
-
-        ensure_numeric_cells_black(summary_sheet, start_row=1)
+        add_totals_chart(
+            delta_heatmap_sheet,
+            delta_totals_export,
+            value_label="Release Delta",
+            title="Delta by date",
+        )
 
     return output.getvalue()
 
