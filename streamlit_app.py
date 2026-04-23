@@ -2655,6 +2655,12 @@ def render_preload_state(logo_markup=None):
         st.markdown(logo_markup, unsafe_allow_html=True)
     previous_release, current_release = render_workspace_upload_panel()
     render_file_slot_cards(prev_file=previous_release, current_file=current_release)
+    if st.session_state.get("error_message"):
+        st.error(st.session_state["error_message"])
+    elif uploads_ready():
+        st.success("Oba pliki sa zapisane. Analiza uruchomi sie automatycznie po odswiezeniu pipeline.")
+    elif st.session_state.get("success_status"):
+        st.success(st.session_state["success_status"])
     if previous_release is None and current_release is None:
         st.info(
             "Zacznij od dodania dwoch plikow Excel. Po zaladowaniu obu release'ow dashboard uruchomi pelna analize porownawcza."
@@ -3315,6 +3321,31 @@ def init_ui_state():
     st.session_state.setdefault("file_view", "overview")
     for nonce_key in UPLOAD_NONCE_KEYS.values():
         st.session_state.setdefault(nonce_key, 0)
+    st.session_state.setdefault("uploaded_files", {})
+    st.session_state.setdefault("file_type", {})
+    st.session_state.setdefault("parsed_data", {})
+    st.session_state.setdefault("transformed_data", {})
+    st.session_state.setdefault("analysis_results", None)
+    st.session_state.setdefault("analysis_signature", None)
+    st.session_state.setdefault("error_message", "")
+    st.session_state.setdefault("success_status", "")
+    st.session_state.setdefault("debug_status", "")
+    previous_upload = get_stored_upload("previous")
+    current_upload = get_stored_upload("current")
+    st.session_state["prev_release_bytes"] = previous_upload["bytes"] if previous_upload else None
+    st.session_state["curr_release_bytes"] = current_upload["bytes"] if current_upload else None
+    st.session_state["uploaded_files"] = {
+        slot_name: {
+            "name": upload_payload.get("name"),
+            "size": upload_payload.get("size"),
+            "sha1": upload_payload.get("sha1"),
+        }
+        for slot_name, upload_payload in (
+            ("previous", previous_upload),
+            ("current", current_upload),
+        )
+        if upload_payload is not None
+    }
 
 
 def set_active_view(view_name, *, close_filters=True):
@@ -3340,21 +3371,82 @@ def get_stored_upload(slot_name):
     return st.session_state.get(UPLOAD_STATE_KEYS[slot_name])
 
 
+def build_uploaded_file_payload(uploaded_file):
+    file_bytes = uploaded_file.getvalue()
+    return {
+        "name": uploaded_file.name,
+        "bytes": file_bytes,
+        "size": len(file_bytes),
+        "sha1": hashlib.sha1(file_bytes).hexdigest(),
+    }
+
+
+def set_pipeline_debug(message):
+    st.session_state["debug_status"] = str(message)
+    print(f"[pipeline] {message}")
+
+
+def clear_analysis_state():
+    st.session_state["file_type"] = {}
+    st.session_state["parsed_data"] = {}
+    st.session_state["transformed_data"] = {}
+    st.session_state["analysis_results"] = None
+    st.session_state["analysis_signature"] = None
+    st.session_state["error_message"] = ""
+    st.session_state["success_status"] = ""
+
+
+def upload_signature(upload_payload):
+    if not isinstance(upload_payload, dict):
+        return ""
+    return f"{upload_payload.get('name', '')}:{upload_payload.get('size', 0)}:{upload_payload.get('sha1', '')}"
+
+
+def current_upload_pair_signature():
+    return "|".join(
+        [
+            upload_signature(get_stored_upload("previous")),
+            upload_signature(get_stored_upload("current")),
+        ]
+    )
+
+
 def store_uploaded_release(slot_name, uploaded_file):
     if uploaded_file is None:
         return get_stored_upload(slot_name)
-    payload = {
-        "name": uploaded_file.name,
-        "bytes": uploaded_file.getvalue(),
-        "size": len(uploaded_file.getvalue()),
-    }
+    payload = build_uploaded_file_payload(uploaded_file)
+    existing_payload = get_stored_upload(slot_name)
     st.session_state[UPLOAD_STATE_KEYS[slot_name]] = payload
+    if slot_name == "previous":
+        st.session_state["prev_release_bytes"] = payload["bytes"]
+    else:
+        st.session_state["curr_release_bytes"] = payload["bytes"]
+    uploaded_files = dict(st.session_state.get("uploaded_files", {}))
+    uploaded_files[slot_name] = {
+        "name": payload["name"],
+        "size": payload["size"],
+        "sha1": payload["sha1"],
+    }
+    st.session_state["uploaded_files"] = uploaded_files
+    if upload_signature(existing_payload) != upload_signature(payload):
+        clear_analysis_state()
+        st.session_state["success_status"] = f"Plik {payload['name']} zostal zapisany."
+        set_pipeline_debug(f"stored {slot_name} upload: {payload['name']} ({payload['size']} bytes)")
     return payload
 
 
 def clear_uploaded_release(slot_name):
     st.session_state.pop(UPLOAD_STATE_KEYS[slot_name], None)
     st.session_state[UPLOAD_NONCE_KEYS[slot_name]] = st.session_state.get(UPLOAD_NONCE_KEYS[slot_name], 0) + 1
+    if slot_name == "previous":
+        st.session_state["prev_release_bytes"] = None
+    else:
+        st.session_state["curr_release_bytes"] = None
+    uploaded_files = dict(st.session_state.get("uploaded_files", {}))
+    uploaded_files.pop(slot_name, None)
+    st.session_state["uploaded_files"] = uploaded_files
+    clear_analysis_state()
+    set_pipeline_debug(f"cleared {slot_name} upload")
 
 
 def clear_workspace_uploads():
@@ -3368,8 +3460,42 @@ def workspace_has_uploads():
     return get_stored_upload("previous") is not None or get_stored_upload("current") is not None
 
 
+def uploads_ready():
+    return bool(
+        st.session_state.get("prev_release_bytes")
+        and st.session_state.get("curr_release_bytes")
+    )
+
+
 def workspace_is_ready():
-    return get_stored_upload("previous") is not None and get_stored_upload("current") is not None
+    return uploads_ready()
+
+
+def sync_uploaded_files_from_widgets():
+    changed = False
+    for slot_name in ("previous", "current"):
+        widget_value = st.session_state.get(get_upload_widget_key(slot_name))
+        if widget_value is None:
+            continue
+        existing_payload = get_stored_upload(slot_name)
+        widget_payload = build_uploaded_file_payload(widget_value)
+        if upload_signature(existing_payload) == upload_signature(widget_payload):
+            continue
+        store_uploaded_release(slot_name, widget_value)
+        changed = True
+    if changed:
+        set_pipeline_debug(
+            "synchronized uploader widgets before analysis gate"
+        )
+    return changed
+
+
+def trigger_analysis_refresh():
+    st.session_state["analysis_signature"] = None
+    st.session_state["analysis_results"] = None
+    st.session_state["error_message"] = ""
+    st.session_state["success_status"] = ""
+    set_pipeline_debug("manual analysis refresh requested")
 
 
 def render_sidebar_user(target=st.sidebar):
@@ -6119,16 +6245,52 @@ def analyze_uploaded_releases():
     previous_release = get_stored_upload("previous")
     current_release = get_stored_upload("current")
     if previous_release is None or current_release is None:
+        clear_analysis_state()
         return None
+
+    signature = current_upload_pair_signature()
+    cached_bundle = st.session_state.get("analysis_results")
+    if cached_bundle is not None and st.session_state.get("analysis_signature") == signature:
+        return cached_bundle
+
     prev_df, prev_meta = load_release(previous_release["bytes"], previous_release["name"])
     curr_df, curr_meta = load_release(current_release["bytes"], current_release["name"])
+    if prev_df is None or curr_df is None:
+        raise ValueError("Parser nie zwrocil danych dla jednego z plikow.")
+    if prev_df.empty or curr_df.empty:
+        raise ValueError("Jeden z zaladowanych plikow nie zawiera danych do porownania.")
+
     result = compare_releases(prev_df, curr_df)
-    return {
+    if result is None:
+        raise ValueError("Analiza nie zwrocila wyniku.")
+
+    bundle = {
         "prev_meta": prev_meta,
         "curr_meta": curr_meta,
         "result": result,
         "brand_context": detect_brand_context(prev_meta, curr_meta),
     }
+    st.session_state["file_type"] = {
+        "previous": prev_meta.get("file_type"),
+        "current": curr_meta.get("file_type"),
+    }
+    st.session_state["parsed_data"] = {
+        "previous": prev_meta,
+        "current": curr_meta,
+    }
+    st.session_state["transformed_data"] = {
+        "previous": prev_df,
+        "current": curr_df,
+    }
+    st.session_state["analysis_results"] = bundle
+    st.session_state["analysis_signature"] = signature
+    st.session_state["error_message"] = ""
+    st.session_state["success_status"] = "Dane zostaly rozpoznane, sparsowane i przeanalizowane."
+    set_pipeline_debug(
+        "analysis ready "
+        f"(prev_rows={len(prev_df)}, curr_rows={len(curr_df)}, result_rows={len(result)})"
+    )
+    return bundle
 
 
 def render_global_filter_drawer(result):
@@ -6417,12 +6579,17 @@ def render_sidebar_filters(analysis_bundle=None):
             prev_meta=prev_meta,
             curr_meta=curr_meta,
         )
+        if uploads_ready() and st.button("Przelicz analize", key="sidebar_recompute_analysis", use_container_width=True):
+            trigger_analysis_refresh()
+            st.rerun()
 
         if analysis_bundle is None:
             st.info("Dodaj oba pliki, aby aktywowac filtry i porownanie release'ow.")
             return build_default_filter_state(), brand_context
 
         st.caption(brand_context.get("format_copy", ""))
+        if st.session_state.get("success_status"):
+            st.success(st.session_state["success_status"])
         return render_filter_controls(analysis_bundle["result"]), brand_context
 
 
@@ -6446,6 +6613,9 @@ def render_sidebar_preload_state():
             prev_file=previous_release,
             current_file=current_release,
         )
+        if uploads_ready() and st.button("Uruchom analize", key="sidebar_run_analysis", use_container_width=True):
+            trigger_analysis_refresh()
+            st.rerun()
         st.info("Dodaj oba pliki, aby aktywowac Dashboard i Reports.")
 
     return brand_context
@@ -6481,6 +6651,8 @@ if not st.session_state["authenticated"]:
 if st.session_state.get("active_view") not in PRIMARY_VIEW_KEYS:
     st.session_state["active_view"] = "dashboard"
 
+sync_uploaded_files_from_widgets()
+
 analysis_bundle = None
 analysis_error = None
 if workspace_is_ready():
@@ -6488,6 +6660,10 @@ if workspace_is_ready():
         analysis_bundle = analyze_uploaded_releases()
     except Exception as exc:
         analysis_error = exc
+        st.session_state["analysis_results"] = None
+        st.session_state["error_message"] = str(exc)
+        st.session_state["success_status"] = ""
+        set_pipeline_debug(f"analysis failed: {exc}")
 
 logo_markup = ui_shell.build_logo_markup(logo_data_uri())
 
