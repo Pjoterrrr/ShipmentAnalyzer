@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import sys
 from types import SimpleNamespace
+from xml.etree import ElementTree as ET
 import altair as alt
 import pandas as pd
 import plotly.graph_objects as go
@@ -2311,39 +2312,38 @@ def _sparkline_svg(values, stroke):
     return f'<div class="kpi-sparkline" aria-hidden="true">{"".join(bars)}</div>'
 
 
+def build_kpi_card_markup(metric):
+    accent = html.escape(str(metric.get("accent", "var(--accent-blue)")))
+    delta_text = html.escape(str(metric.get("delta", metric.get("copy", ""))))
+    delta_label = html.escape(str(metric.get("delta_label", "Delta")))
+    delta_width = float(metric.get("delta_width", 42.0))
+    sparkline = _sparkline_svg(metric.get("sparkline", []), accent)
+    parts = [
+        f'<div class="kpi-card" style="--kpi-accent: {accent}; --delta-width: {delta_width:.1f}%;">',
+        f'<div class="kpi-label">{html.escape(str(metric.get("label", "")))}</div>',
+        f'<div class="kpi-value">{html.escape(str(metric.get("value", "0")))}</div>',
+        '<div class="kpi-delta">',
+        f"<span>{delta_label}</span>",
+        f'<span class="kpi-delta-value">{delta_text}</span>',
+        "</div>",
+        '<div class="kpi-progress"><span></span></div>',
+        f'<div class="kpi-copy">{html.escape(str(metric.get("copy", "")))}</div>',
+    ]
+    if sparkline:
+        parts.append(sparkline)
+    parts.append("</div>")
+    return "".join(parts)
+
+
+def build_kpi_grid_markup(metrics):
+    cards_html = "".join(build_kpi_card_markup(metric) for metric in metrics)
+    markup = f'<div class="kpi-grid">{cards_html}</div>'
+    ET.fromstring(f"<root>{markup}</root>")
+    return markup
+
+
 def render_kpi_cards(metrics):
-    cards_html = []
-    for metric in metrics:
-        accent = html.escape(str(metric.get("accent", "var(--accent-blue)")))
-        delta_text = html.escape(str(metric.get("delta", metric.get("copy", ""))))
-        delta_label = html.escape(str(metric.get("delta_label", "Delta")))
-        delta_width = float(metric.get("delta_width", 42.0))
-        sparkline = _sparkline_svg(metric.get("sparkline", []), accent)
-        cards_html.append(
-            (
-                '<div class="kpi-card" style="--kpi-accent: {accent}; --delta-width: {delta_width:.1f}%;">'
-                '<div class="kpi-label">{label}</div>'
-                '<div class="kpi-value">{value}</div>'
-                '<div class="kpi-delta">'
-                '<span>{delta_label}</span>'
-                '<span class="kpi-delta-value">{delta_text}</span>'
-                "</div>"
-                '<div class="kpi-progress"><span></span></div>'
-                '<div class="kpi-copy">{copy}</div>'
-                "{sparkline}"
-                "</div>"
-            ).format(
-                accent=accent,
-                delta_width=delta_width,
-                label=html.escape(str(metric.get("label", ""))),
-                value=html.escape(str(metric.get("value", "0"))),
-                delta_label=delta_label,
-                delta_text=delta_text,
-                copy=html.escape(str(metric.get("copy", ""))),
-                sparkline=sparkline,
-            )
-        )
-    st.markdown(f'<div class="kpi-grid">{"".join(cards_html)}</div>', unsafe_allow_html=True)
+    st.markdown(build_kpi_grid_markup(metrics), unsafe_allow_html=True)
 
 
 def render_kpi_row(metrics):
