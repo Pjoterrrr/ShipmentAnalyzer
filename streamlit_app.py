@@ -2159,7 +2159,7 @@ def build_active_filter_export_summary():
     if bool(filter_state.get("only_alerts", False)):
         summary_parts.append("Tylko alerty")
     change_directions = filter_state.get("selected_change_directions", [])
-    if change_directions and len(change_directions) < len(CHANGE_DIRECTION_OPTIONS):
+    if change_directions and len(change_directions) < len(CHANGE_DIRECTION_LABELS):
         labels = ", ".join(get_change_label(direction) for direction in change_directions)
         summary_parts.append(f"Kierunki: {labels}")
     return " | ".join(summary_parts)
