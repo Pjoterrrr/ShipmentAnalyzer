@@ -3292,6 +3292,14 @@ def init_ui_state():
     st.session_state.setdefault("active_view", "dashboard")
     st.session_state.setdefault("filters_expanded", False)
     st.session_state.setdefault("file_view", "overview")
+    st.session_state.setdefault("prev_release_bytes", None)
+    st.session_state.setdefault("curr_release_bytes", None)
+    previous_payload = st.session_state.get(UPLOAD_STATE_KEYS["previous"])
+    current_payload = st.session_state.get(UPLOAD_STATE_KEYS["current"])
+    if previous_payload and st.session_state.get("prev_release_bytes") is None:
+        st.session_state["prev_release_bytes"] = previous_payload.get("bytes")
+    if current_payload and st.session_state.get("curr_release_bytes") is None:
+        st.session_state["curr_release_bytes"] = current_payload.get("bytes")
     for nonce_key in UPLOAD_NONCE_KEYS.values():
         st.session_state.setdefault(nonce_key, 0)
 
@@ -3328,12 +3336,20 @@ def store_uploaded_release(slot_name, uploaded_file):
         "size": len(uploaded_file.getvalue()),
     }
     st.session_state[UPLOAD_STATE_KEYS[slot_name]] = payload
+    if slot_name == "previous":
+        st.session_state["prev_release_bytes"] = payload["bytes"]
+    if slot_name == "current":
+        st.session_state["curr_release_bytes"] = payload["bytes"]
     return payload
 
 
 def clear_uploaded_release(slot_name):
     st.session_state.pop(UPLOAD_STATE_KEYS[slot_name], None)
     st.session_state[UPLOAD_NONCE_KEYS[slot_name]] = st.session_state.get(UPLOAD_NONCE_KEYS[slot_name], 0) + 1
+    if slot_name == "previous":
+        st.session_state["prev_release_bytes"] = None
+    if slot_name == "current":
+        st.session_state["curr_release_bytes"] = None
 
 
 def clear_workspace_uploads():
@@ -3347,8 +3363,14 @@ def workspace_has_uploads():
     return get_stored_upload("previous") is not None or get_stored_upload("current") is not None
 
 
+def uploads_ready() -> bool:
+    return bool(
+        st.session_state.get("prev_release_bytes") and st.session_state.get("curr_release_bytes")
+    )
+
+
 def workspace_is_ready():
-    return get_stored_upload("previous") is not None and get_stored_upload("current") is not None
+    return uploads_ready()
 
 
 def render_sidebar_user(target=st.sidebar):
@@ -6368,13 +6390,44 @@ def render_sidebar_upload_controls():
     return stored_previous, stored_current
 
 
-def render_sidebar_filters(analysis_bundle=None):
+def render_preload_state(logo_markup):
+    render_app_header(
+        detect_brand_context(),
+        APP_TITLE,
+        "Dodaj poprzedni i aktualny release, aby uruchomic porownanie. Upload jest widoczny od razu po wejściu.",
+        meta_items=[
+            "Krok 1: upload",
+            "Krok 2: analiza",
+            "Krok 3: Dashboard i Reports",
+        ],
+        file_caption="Start analizy",
+    )
+    st.markdown(logo_markup, unsafe_allow_html=True)
+    ui_shell.render_panel_intro(
+        "Start",
+        "Dodaj pliki do analizy",
+        "Wrzuc dwa pliki Excel. Po ich zapisaniu do `st.session_state` parser uruchomi analize i pokaże Dashboard oraz Reports.",
+    )
+    render_workspace_upload_panel()
+    stored_previous = get_stored_upload("previous")
+    stored_current = get_stored_upload("current")
+    render_file_slot_cards(
+        prev_file=stored_previous,
+        current_file=stored_current,
+        prev_meta=None,
+        curr_meta=None,
+    )
+    if stored_previous is None or stored_current is None:
+        st.info("Dodaj oba pliki, aby aktywowac analize i odblokowac Dashboard oraz Reports.")
+
+
+def render_sidebar_uploads_and_filters(analysis_bundle=None):
     with st.sidebar:
         render_sidebar_user(st)
-        previous_release, current_release = render_sidebar_upload_controls()
-
         prev_meta = analysis_bundle["prev_meta"] if analysis_bundle else None
         curr_meta = analysis_bundle["curr_meta"] if analysis_bundle else None
+        previous_release = get_stored_upload("previous")
+        current_release = get_stored_upload("current")
         brand_context = (
             analysis_bundle["brand_context"]
             if analysis_bundle
@@ -6435,39 +6488,28 @@ if not st.session_state["authenticated"]:
 if st.session_state.get("active_view") not in PRIMARY_VIEW_KEYS:
     st.session_state["active_view"] = "dashboard"
 
+logo_markup = ui_shell.build_logo_markup(logo_data_uri())
+
+if not uploads_ready():
+    render_preload_state(logo_markup)
+    st.stop()
+
 analysis_bundle = None
 analysis_error = None
-if workspace_is_ready():
-    try:
-        analysis_bundle = analyze_uploaded_releases()
-    except Exception as exc:
-        analysis_error = exc
+try:
+    analysis_bundle = analyze_uploaded_releases()
+except Exception as exc:
+    analysis_error = exc
 
-filter_state, sidebar_brand_context = render_sidebar_filters(analysis_bundle)
-logo_markup = ui_shell.build_logo_markup(logo_data_uri())
+if analysis_bundle is None:
+    if analysis_error is not None:
+        st.error(f"Blad wczytywania plikow: {analysis_error}")
+    st.stop()
+
+filter_state, sidebar_brand_context = render_sidebar_uploads_and_filters(analysis_bundle)
 
 if analysis_error is not None:
     st.error(f"Blad wczytywania plikow: {analysis_error}")
-
-if analysis_bundle is None:
-    render_app_header(
-        sidebar_brand_context,
-        APP_TITLE,
-        "Enterprise dashboard do porownywania release'ow. Dashboard i Reports aktywuja sie po zaladowaniu dwoch plikow Excel.",
-        meta_items=[
-            "Tylko Dashboard i Reports",
-            "Filtry pozostaja po lewej stronie",
-            "Planner i pozostala logika zachowane w repo",
-        ],
-        file_caption="Oczekiwanie na komplet plikow wejsciowych",
-    )
-    ui_shell.render_panel_intro(
-        "Workspace",
-        "Dashboard oczekuje na dane",
-        "Dodaj poprzedni i aktualny release w lewym sidebarze, aby uruchomic analize, wykresy i eksporty.",
-    )
-    st.markdown(logo_markup, unsafe_allow_html=True)
-    st.stop()
 
 prev_meta = analysis_bundle["prev_meta"]
 curr_meta = analysis_bundle["curr_meta"]
