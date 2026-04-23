@@ -20,6 +20,10 @@ from openpyxl.utils import get_column_letter
 THRESHOLD = 15
 MAX_MATRIX_STYLE_CELLS = 50000
 BRAND_NAME = "Pjoter Development"
+UPLOAD_SESSION_KEYS = {
+    "previous": ("prev_release_bytes", "prev_release_name"),
+    "current": ("curr_release_bytes", "curr_release_name"),
+}
 BASE_DIR = Path(__file__).resolve().parent
 RUNTIME_ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else BASE_DIR
 
@@ -852,6 +856,91 @@ def render_upload_card(step, title, copy):
         unsafe_allow_html=True,
     )
 
+
+def init_upload_state():
+    st.session_state.setdefault("prev_release_bytes", None)
+    st.session_state.setdefault("curr_release_bytes", None)
+    st.session_state.setdefault("prev_release_name", "")
+    st.session_state.setdefault("curr_release_name", "")
+
+
+def store_uploaded_release(slot_name, uploaded_file):
+    if uploaded_file is None:
+        return
+    bytes_key, name_key = UPLOAD_SESSION_KEYS[slot_name]
+    st.session_state[bytes_key] = uploaded_file.getvalue()
+    st.session_state[name_key] = uploaded_file.name
+
+
+def clear_uploaded_release(slot_name):
+    bytes_key, name_key = UPLOAD_SESSION_KEYS[slot_name]
+    st.session_state[bytes_key] = None
+    st.session_state[name_key] = ""
+
+
+def uploads_ready() -> bool:
+    return bool(
+        st.session_state.get("prev_release_bytes")
+        and st.session_state.get("curr_release_bytes")
+    )
+
+
+def get_uploaded_release(slot_name):
+    bytes_key, name_key = UPLOAD_SESSION_KEYS[slot_name]
+    file_bytes = st.session_state.get(bytes_key)
+    file_name = st.session_state.get(name_key)
+    if not file_bytes or not file_name:
+        return None
+    return {"bytes": file_bytes, "name": file_name}
+
+
+def render_preload_state():
+    render_section_header(
+        "Start analizy",
+        "Dodaj pliki do porownania",
+        "Wgraj Previous Release i Current Release. Po zapisaniu obu plikow aplikacja automatycznie uruchomi analize i pokaże dashboard.",
+    )
+    upload_left, upload_right = st.columns(2, gap="large")
+    with upload_left:
+        render_upload_card(
+            "Previous Release",
+            "Poprzedni release / poprzedni plan",
+            "Bazowy plik Excel do porownania z aktualnym stanem zamowien i wysylek.",
+        )
+        previous_upload = st.file_uploader(
+            "Previous Release",
+            type=["xlsx"],
+            key="previous_release_upload",
+            label_visibility="visible",
+        )
+        if previous_upload is not None:
+            store_uploaded_release("previous", previous_upload)
+        stored_previous = get_uploaded_release("previous")
+        if stored_previous is not None:
+            st.caption(f"Zaladowany plik: {stored_previous['name']}")
+            if st.button("Usun Previous Release", key="clear_previous_release", use_container_width=True):
+                clear_uploaded_release("previous")
+                st.rerun()
+    with upload_right:
+        render_upload_card(
+            "Current Release",
+            "Aktualny release / aktualny plan",
+            "Nowy plik Excel, na podstawie ktorego liczone sa delty, alerty i zmiany procentowe.",
+        )
+        current_upload = st.file_uploader(
+            "Current Release",
+            type=["xlsx"],
+            key="current_release_upload",
+            label_visibility="visible",
+        )
+        if current_upload is not None:
+            store_uploaded_release("current", current_upload)
+        stored_current = get_uploaded_release("current")
+        if stored_current is not None:
+            st.caption(f"Zaladowany plik: {stored_current['name']}")
+            if st.button("Usun Current Release", key="clear_current_release", use_container_width=True):
+                clear_uploaded_release("current")
+                st.rerun()
 
 def render_quick_card(title, copy):
     st.markdown(
@@ -2785,6 +2874,7 @@ def render_loaded_dashboard(prev_meta, curr_meta, result):
 
 
 init_auth_state()
+init_upload_state()
 
 if not st.session_state["authenticated"]:
     render_login_screen()
@@ -2792,33 +2882,17 @@ if not st.session_state["authenticated"]:
 
 render_sidebar_user()
 
-upload_left, upload_right = st.columns(2, gap="large")
-with upload_left:
-    render_upload_card(
-        "Krok 1",
-        "Poprzedni release / poprzedni plan",
-        "Dodaj bazowy plik Excel, do którego będzie porównywany aktualny stan zamówień i wysyłek.",
-    )
-    prev_file = st.file_uploader(
-        "Wczytaj poprzedni release",
-        type=["xlsx"],
-        key="previous_release_upload",
-        label_visibility="collapsed",
-    )
-with upload_right:
-    render_upload_card(
-        "Krok 2",
-        "Aktualny release / aktualny plan",
-        "Dodaj nowy plik Excel, aby dashboard automatycznie policzył delty, alerty i zmiany procentowe.",
-    )
-    current_file = st.file_uploader(
-        "Wczytaj aktualny release",
-        type=["xlsx"],
-        key="current_release_upload",
-        label_visibility="collapsed",
-    )
+render_preload_state()
 
-if prev_file is None and current_file is None:
+previous_release = get_uploaded_release("previous")
+current_release = get_uploaded_release("current")
+
+if not uploads_ready():
+    missing_files = []
+    if previous_release is None:
+        missing_files.append("Previous Release")
+    if current_release is None:
+        missing_files.append("Current Release")
     quick_cols = st.columns(3, gap="large")
     with quick_cols[0]:
         render_quick_card(
@@ -2835,17 +2909,14 @@ if prev_file is None and current_file is None:
             "Raport gotowy do wysłania",
             "Po analizie pobierzesz CSV oraz biznesowy raport Excel z podsumowaniem KPI i kluczowymi zmianami.",
         )
-    st.info("Zacznij od dodania dwóch plików Excel. Po załadowaniu obu release'ów dashboard uruchomi pełną analizę porównawczą.")
-elif prev_file is None or current_file is None:
-    missing_label = "poprzedni" if prev_file is None else "aktualny"
-    loaded_label = "aktualny" if prev_file is None else "poprzedni"
-    st.info(
-        f"Plik {loaded_label} jest już dodany. Dodaj jeszcze plik {missing_label}, aby uruchomić analizę i wygenerować dashboard."
-    )
+    if len(missing_files) == 2:
+        st.info("Zacznij od dodania dwóch plików Excel. Po załadowaniu obu release'ów dashboard uruchomi pełną analizę porównawczą.")
+    else:
+        st.info(f"Brakuje jeszcze: {', '.join(missing_files)}. Po dodaniu drugiego pliku analiza uruchomi się automatycznie.")
 else:
     try:
-        prev_df, prev_meta = load_release(prev_file.getvalue(), prev_file.name)
-        curr_df, curr_meta = load_release(current_file.getvalue(), current_file.name)
+        prev_df, prev_meta = load_release(previous_release["bytes"], previous_release["name"])
+        curr_df, curr_meta = load_release(current_release["bytes"], current_release["name"])
         result = compare_releases(prev_df, curr_df)
     except Exception as exc:
         st.error(f"Nie udało się wczytać plików lub przygotować analizy. Szczegóły: {exc}")
