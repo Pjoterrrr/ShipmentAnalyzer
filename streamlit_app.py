@@ -2646,6 +2646,28 @@ def render_upload_section():
 
 
 def render_export_actions(csv_bytes, excel_bytes, professional_excel_bytes=None):
+def render_preload_state(logo_markup=None):
+    render_section_header(
+        "Start",
+        "Dodaj pliki do analizy",
+        "Wgraj Previous Release i Current Release. Po dodaniu obu plikow aplikacja uruchomi analize i pokaze dashboard.",
+    )
+    if logo_markup:
+        st.markdown(logo_markup, unsafe_allow_html=True)
+    previous_release, current_release = render_workspace_upload_panel()
+    render_file_slot_cards(prev_file=previous_release, current_file=current_release)
+    if previous_release is None and current_release is None:
+        st.info(
+            "Zacznij od dodania dwoch plikow Excel. Po zaladowaniu obu release'ow dashboard uruchomi pelna analize porownawcza."
+        )
+    elif previous_release is None or current_release is None:
+        missing_label = "Previous Release" if previous_release is None else "Current Release"
+        st.info(
+            f"Brakuje jeszcze pliku: {missing_label}. Po dodaniu drugiego pliku analiza uruchomi sie automatycznie."
+        )
+
+
+def render_export_actions(csv_bytes, excel_bytes, professional_excel_bytes=None):
     render_section_header(
         "Eksport",
         "Pobierz wyniki",
@@ -6464,9 +6486,9 @@ if analysis_bundle is None:
     ui_shell.render_panel_intro(
         "Workspace",
         "Dashboard oczekuje na dane",
-        "Dodaj poprzedni i aktualny release w lewym sidebarze, aby uruchomic analize, wykresy i eksporty.",
+        "Dodaj poprzedni i aktualny release. Upload jest widoczny bezposrednio w glownej sekcji startowej.",
     )
-    st.markdown(logo_markup, unsafe_allow_html=True)
+    render_preload_state(logo_markup)
     st.stop()
 
 prev_meta = analysis_bundle["prev_meta"]
@@ -6611,13 +6633,13 @@ app_sidebar, app_main = st.columns([0.27, 0.73], gap="large")
 
 with app_sidebar:
     render_sidebar_user(st)
-    prev_file, current_file = render_upload_section()
+
+with app_main:
+    prev_file, current_file = render_preload_state()
 
 if prev_file is None or current_file is None:
     with app_sidebar:
         render_welcome_side_panel(prev_file, current_file)
-    with app_main:
-        render_welcome_state(prev_file, current_file)
     st.stop()
 
 try:
