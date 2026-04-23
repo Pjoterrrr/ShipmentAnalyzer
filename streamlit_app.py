@@ -2320,19 +2320,19 @@ def render_kpi_cards(metrics):
         delta_width = float(metric.get("delta_width", 42.0))
         sparkline = _sparkline_svg(metric.get("sparkline", []), accent)
         cards_html.append(
-            """
-            <div class="kpi-card" style="--kpi-accent: {accent}; --delta-width: {delta_width:.1f}%;">
-                <div class="kpi-label">{label}</div>
-                <div class="kpi-value">{value}</div>
-                <div class="kpi-delta">
-                    <span>{delta_label}</span>
-                    <span class="kpi-delta-value">{delta_text}</span>
-                </div>
-                <div class="kpi-progress"><span></span></div>
-                <div class="kpi-copy">{copy}</div>
-                {sparkline}
-            </div>
-            """.format(
+            (
+                '<div class="kpi-card" style="--kpi-accent: {accent}; --delta-width: {delta_width:.1f}%;">'
+                '<div class="kpi-label">{label}</div>'
+                '<div class="kpi-value">{value}</div>'
+                '<div class="kpi-delta">'
+                '<span>{delta_label}</span>'
+                '<span class="kpi-delta-value">{delta_text}</span>'
+                "</div>"
+                '<div class="kpi-progress"><span></span></div>'
+                '<div class="kpi-copy">{copy}</div>'
+                "{sparkline}"
+                "</div>"
+            ).format(
                 accent=accent,
                 delta_width=delta_width,
                 label=html.escape(str(metric.get("label", ""))),
