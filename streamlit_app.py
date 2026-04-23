@@ -198,7 +198,7 @@ ROLE_MODULE_PERMISSIONS = {
 st.set_page_config(
     page_title="Pjoter Development | Analiza zamówień i wysyłek",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 st.markdown(
     """
@@ -277,10 +277,6 @@ st.markdown(
         color: var(--steel) !important;
     }
 
-    [data-testid="collapsedControl"],
-    [data-testid="stSidebarCollapseButton"],
-    button[aria-label="Close sidebar"],
-    button[aria-label="Open sidebar"],
     [data-testid="stToolbar"] {
         display: none !important;
     }
@@ -6849,59 +6845,58 @@ def render_sidebar_upload_controls():
 
 
 def render_sidebar_filters(analysis_bundle=None):
-    with st.sidebar:
-        render_sidebar_user(st)
-        previous_release = get_stored_upload("previous")
-        current_release = get_stored_upload("current")
+    render_sidebar_user(st)
+    previous_release = get_stored_upload("previous")
+    current_release = get_stored_upload("current")
 
-        prev_meta = analysis_bundle["prev_meta"] if analysis_bundle else None
-        curr_meta = analysis_bundle["curr_meta"] if analysis_bundle else None
-        brand_context = (
-            analysis_bundle["brand_context"]
-            if analysis_bundle
-            else detect_brand_context(
-                {"file_name": previous_release.get("name")} if previous_release else None,
-                {"file_name": current_release.get("name")} if current_release else None,
-            )
+    prev_meta = analysis_bundle["prev_meta"] if analysis_bundle else None
+    curr_meta = analysis_bundle["curr_meta"] if analysis_bundle else None
+    brand_context = (
+        analysis_bundle["brand_context"]
+        if analysis_bundle
+        else detect_brand_context(
+            {"file_name": previous_release.get("name")} if previous_release else None,
+            {"file_name": current_release.get("name")} if current_release else None,
         )
+    )
 
-        render_filter_panel_shell(
-            kicker="Filters",
-            title="Filtry i status analizy",
-            copy="Filtry i kalendarz pozostaja stale widoczne w górnej części sidebaru podczas pracy z analizą.",
-        )
-        render_side_panel_brand(brand_context)
+    render_filter_panel_shell(
+        kicker="Filters",
+        title="Filtry i status analizy",
+        copy="Filtry i kalendarz pozostaja stale widoczne w lewej kolumnie podczas pracy z analizą.",
+    )
+    render_side_panel_brand(brand_context)
 
-        if analysis_bundle is None:
-            render_sidebar_upload_controls()
-            render_file_slot_cards(
-                prev_file=previous_release,
-                current_file=current_release,
-            )
-            st.info("Dodaj oba pliki, aby aktywowac filtry i porownanie release'ow.")
-            return build_default_filter_state(), brand_context
-
-        st.caption(brand_context.get("format_copy", ""))
-        if st.session_state.get("success_status"):
-            st.success(st.session_state["success_status"])
-        filter_state = render_filters_panel(analysis_bundle["result"])
-        st.markdown('<hr class="side-panel-divider" />', unsafe_allow_html=True)
-        render_section_header(
-            "Workspace",
-            "Pliki i status",
-            "Upload i status pozostaja dostepne ponizej filtrow bez zaslaniania kalendarza.",
-        )
+    if analysis_bundle is None:
         render_sidebar_upload_controls()
         render_file_slot_cards(
-            prev_file=None if prev_meta else previous_release,
-            current_file=None if curr_meta else current_release,
-            prev_meta=prev_meta,
-            curr_meta=curr_meta,
+            prev_file=previous_release,
+            current_file=current_release,
         )
-        if uploads_ready() and st.button("Przelicz analize", key="sidebar_recompute_analysis", use_container_width=True):
-            trigger_analysis_refresh()
-            st.rerun()
-        return filter_state, brand_context
+        st.info("Dodaj oba pliki, aby aktywowac filtry i porownanie release'ow.")
+        return build_default_filter_state(), brand_context
+
+    st.caption(brand_context.get("format_copy", ""))
+    if st.session_state.get("success_status"):
+        st.success(st.session_state["success_status"])
+    filter_state = render_filters_panel(analysis_bundle["result"])
+    st.markdown('<hr class="side-panel-divider" />', unsafe_allow_html=True)
+    render_section_header(
+        "Workspace",
+        "Pliki i status",
+        "Upload i status pozostaja dostepne ponizej filtrow bez zaslaniania kalendarza.",
+    )
+    render_sidebar_upload_controls()
+    render_file_slot_cards(
+        prev_file=None if prev_meta else previous_release,
+        current_file=None if curr_meta else current_release,
+        prev_meta=prev_meta,
+        curr_meta=curr_meta,
+    )
+    if uploads_ready() and st.button("Przelicz analize", key="sidebar_recompute_analysis", use_container_width=True):
+        trigger_analysis_refresh()
+        st.rerun()
+    return filter_state, brand_context
 
 
 def render_sidebar_preload_state():
@@ -7002,7 +6997,11 @@ if analysis_bundle is None:
     render_preload_state(logo_markup)
     st.stop()
 
-filter_state, sidebar_brand_context = render_sidebar_filters(analysis_bundle)
+filters_col, content_col = st.columns([0.30, 0.70], gap="large")
+
+with filters_col:
+    filter_state, sidebar_brand_context = render_sidebar_filters(analysis_bundle)
+
 prev_meta = analysis_bundle["prev_meta"]
 curr_meta = analysis_bundle["curr_meta"]
 result = analysis_bundle["result"]
@@ -7079,37 +7078,38 @@ module_data = build_module_context(
     professional_excel_bytes=professional_excel_bytes,
 )
 
-render_app_header(
-    brand_context,
-    APP_TITLE,
-    "Premium dark workspace z dwoma glownymi modulami: Dashboard i Reports. Filtry oraz upload pozostaja po lewej stronie.",
-    meta_items=[
-        describe_format_context(prev_meta, curr_meta),
-        f"PO {curr_meta.get('po_number', 'n/a')}",
-        f"Zakres {format_workspace_date_range(filter_state)}",
-        f"Tygodnie {format_workspace_week_range(filter_state)}",
-        f"Wiersze po filtrach: {len(filtered_df):,}",
-    ],
-    file_caption=curr_meta.get("file_name", ""),
-)
-build_workspace_context_cards(prev_meta, curr_meta, filter_state, filtered_df)
+with content_col:
+    render_app_header(
+        brand_context,
+        APP_TITLE,
+        "Premium dark workspace z dwoma glownymi modulami: Dashboard i Reports. Filtry oraz upload pozostaja po lewej stronie.",
+        meta_items=[
+            describe_format_context(prev_meta, curr_meta),
+            f"PO {curr_meta.get('po_number', 'n/a')}",
+            f"Zakres {format_workspace_date_range(filter_state)}",
+            f"Tygodnie {format_workspace_week_range(filter_state)}",
+            f"Wiersze po filtrach: {len(filtered_df):,}",
+        ],
+        file_caption=curr_meta.get("file_name", ""),
+    )
+    build_workspace_context_cards(prev_meta, curr_meta, filter_state, filtered_df)
 
-selected_view = st.segmented_control(
-    "Main view",
-    options=list(MAIN_VIEW_OPTIONS),
-    selection_mode="single",
-    default=st.session_state.get("active_view", "dashboard"),
-    required=True,
-    key="active_view",
-    format_func=lambda value: MODULE_LABELS.get(value, value.title()),
-    width="stretch",
-)
-selected_view = selected_view or "dashboard"
+    selected_view = st.segmented_control(
+        "Main view",
+        options=list(MAIN_VIEW_OPTIONS),
+        selection_mode="single",
+        default=st.session_state.get("active_view", "dashboard"),
+        required=True,
+        key="active_view",
+        format_func=lambda value: MODULE_LABELS.get(value, value.title()),
+        width="stretch",
+    )
+    selected_view = selected_view or "dashboard"
 
-if selected_view == "reports":
-    render_reports_view(module_data, ui)
-else:
-    render_dashboard_view(module_data, ui)
+    if selected_view == "reports":
+        render_reports_view(module_data, ui)
+    else:
+        render_dashboard_view(module_data, ui)
 
 st.stop()
 
