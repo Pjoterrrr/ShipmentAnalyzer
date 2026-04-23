@@ -1822,10 +1822,21 @@ st.markdown(
     }
 
     .kpi-sparkline {
-      display: block;
+      display: flex;
+      align-items: end;
+      gap: 4px;
       width: 100%;
       height: 34px;
+      margin-top: var(--sp-2);
       opacity: 0.92;
+    }
+
+    .kpi-sparkline__bar {
+      flex: 1 1 0;
+      min-width: 0;
+      border-radius: 999px 999px 3px 3px;
+      background: linear-gradient(180deg, color-mix(in srgb, var(--kpi-accent, var(--accent-blue)) 92%, #ffffff 8%), color-mix(in srgb, var(--kpi-accent, var(--accent-blue)) 28%, transparent 72%));
+      opacity: 0.95;
     }
 
     div[data-testid="stElementContainer"]:has(> div[data-testid="stPlotlyChart"]),
@@ -2291,22 +2302,13 @@ def _sparkline_svg(values, stroke):
     min_value = min(series)
     max_value = max(series)
     span = max(max_value - min_value, 1.0)
-    width = 180
-    height = 34
-    step = width / max(len(series) - 1, 1)
-    points = []
-    for index, value in enumerate(series):
-        x = round(index * step, 2)
-        y = round(height - (((value - min_value) / span) * (height - 6)) - 3, 2)
-        points.append(f"{x},{y}")
-    polyline = " ".join(points)
-    area = " ".join(points + [f"{width},{height}", f"0,{height}"])
-    return (
-        f'<svg class="kpi-sparkline" viewBox="0 0 {width} {height}" preserveAspectRatio="none">'
-        f'<polyline points="{area}" fill="{stroke}22" stroke="none"></polyline>'
-        f'<polyline points="{polyline}" fill="none" stroke="{stroke}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"></polyline>'
-        "</svg>"
-    )
+    bars = []
+    for value in series:
+        height_pct = 18 + (((value - min_value) / span) * 82)
+        bars.append(
+            f'<span class="kpi-sparkline__bar" style="height:{height_pct:.1f}%"></span>'
+        )
+    return f'<div class="kpi-sparkline" aria-hidden="true">{"".join(bars)}</div>'
 
 
 def render_kpi_cards(metrics):
