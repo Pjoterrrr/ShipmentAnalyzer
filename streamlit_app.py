@@ -2645,7 +2645,6 @@ def render_upload_section():
     return prev_file, current_file
 
 
-def render_export_actions(csv_bytes, excel_bytes, professional_excel_bytes=None):
 def render_preload_state(logo_markup=None):
     render_section_header(
         "Start",
