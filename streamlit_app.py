@@ -12,7 +12,6 @@ import altair as alt
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
-from openpyxl.chart import BarChart, LineChart, Reference
 from analytics_calendar import (
     build_calendar_frame,
     build_weekly_summary,
@@ -2096,7 +2095,7 @@ def render_chart_table_switch(
         if chart_export_config:
             export_title = str(export_state.get("title", "chart_export")).strip() or "chart_export"
             st.download_button(
-                "Eksportuj wykres do Excel",
+                "Eksportuj dane wykresu Excel",
                 data=export_bytes or b"",
                 file_name=f"{slugify_filename(export_title)}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -2258,50 +2257,6 @@ def add_excel_chart_export_data(data_sheet, raw_export_df, chart_export_df):
     return helper_start_col
 
 
-def build_excel_native_chart(data_sheet, helper_start_col, chart_export_df, state):
-    if chart_export_df is None or chart_export_df.empty or helper_start_col is None:
-        return None
-
-    chart_type = str(state.get("chart_type", "line")).strip().lower()
-    category_label = chart_export_df.columns[0]
-    series_columns = list(chart_export_df.columns[1:])
-    if not series_columns:
-        return None
-
-    if chart_type == "line":
-        chart = LineChart()
-    else:
-        chart = BarChart()
-        chart.type = "bar" if chart_type == "bar" else "col"
-        if state.get("stacked"):
-            chart.grouping = "stacked"
-
-    chart.style = 10
-    chart.title = state.get("title", "Chart export")
-    chart.height = float(state.get("height", 8.5))
-    chart.width = float(state.get("width", 18))
-    chart.x_axis.title = state.get("x_axis_title", category_label)
-    chart.y_axis.title = state.get("y_axis_title", series_columns[0])
-
-    data_reference = Reference(
-        data_sheet,
-        min_col=helper_start_col + 1,
-        max_col=helper_start_col + len(series_columns),
-        min_row=1,
-        max_row=1 + len(chart_export_df),
-    )
-    category_reference = Reference(
-        data_sheet,
-        min_col=helper_start_col,
-        min_row=2,
-        max_row=1 + len(chart_export_df),
-    )
-    chart.add_data(data_reference, titles_from_data=True)
-    chart.set_categories(category_reference)
-    chart.legend.position = "r"
-    return chart
-
-
 def build_chart_export_metadata(chart_id, chart_title, chart_dataset, plot_dataset, state):
     return [
         ("Nazwa wykresu", chart_title),
@@ -2348,7 +2303,8 @@ def build_excel_chart_workbook(chart_id, filtered_data, state):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         raw_export_df.to_excel(writer, sheet_name="Data", index=False)
-        pd.DataFrame().to_excel(writer, sheet_name="Chart", index=False)
+        chart_export_df.to_excel(writer, sheet_name="Chart Data", index=False)
+        pd.DataFrame().to_excel(writer, sheet_name="Metadata", index=False)
 
         data_sheet = writer.book["Data"]
         style_excel_header(data_sheet, 1)
@@ -2358,8 +2314,15 @@ def build_excel_chart_workbook(chart_id, filtered_data, state):
         autosize_worksheet(data_sheet)
         ensure_numeric_cells_black(data_sheet, start_row=2)
 
-        helper_start_col = add_excel_chart_export_data(data_sheet, raw_export_df, chart_export_df)
-        chart_sheet = writer.book["Chart"]
+        chart_data_sheet = writer.book["Chart Data"]
+        style_excel_header(chart_data_sheet, 1)
+        style_table_region(chart_data_sheet, 1)
+        chart_data_sheet.freeze_panes = "A2"
+        chart_data_sheet.auto_filter.ref = chart_data_sheet.dimensions
+        autosize_worksheet(chart_data_sheet)
+        ensure_numeric_cells_black(chart_data_sheet, start_row=2)
+
+        metadata_sheet = writer.book["Metadata"]
         metadata_rows = build_chart_export_metadata(
             chart_id,
             state.get("title", chart_id),
@@ -2367,10 +2330,7 @@ def build_excel_chart_workbook(chart_id, filtered_data, state):
             chart_export_df,
             state,
         )
-        write_chart_export_metadata(chart_sheet, metadata_rows, state.get("title", chart_id))
-        excel_chart = build_excel_native_chart(data_sheet, helper_start_col, chart_export_df, state)
-        if excel_chart is not None:
-            chart_sheet.add_chart(excel_chart, "A12")
+        write_chart_export_metadata(metadata_sheet, metadata_rows, state.get("title", chart_id))
 
     return output.getvalue()
 
@@ -2997,9 +2957,9 @@ def render_extended_export_actions(csv_bytes, excel_bytes, professional_excel_by
         )
     with download_right:
         st.download_button(
-            "Pobierz Weekly by Part Excel",
+            "Pobierz raport tygodniowy Excel",
             data=professional_excel_bytes or b"",
-            file_name="weekly_by_part_report.xlsx",
+            file_name="weekly_operational_report.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             use_container_width=True,
             disabled=not professional_excel_bytes,
@@ -6044,11 +6004,15 @@ def build_weekly_by_part_report(detail_df, date_basis):
         "Week Label",
         "Week Start",
         "Week End",
+        "Total Qty in Week",
         "Previous Release Qty",
         "Current Release Qty",
         "Release Delta",
         "Release Change %",
         "Previous Week Qty",
+        "WoW Delta",
+        "WoW Change %",
+        "Trend / Status",
     ]
     if detail_df is None or detail_df.empty or date_basis not in detail_df.columns:
         return pd.DataFrame(columns=columns)
@@ -6086,6 +6050,8 @@ def build_weekly_by_part_report(detail_df, date_basis):
     weekly["Previous Week Qty"] = (
         weekly.groupby("Part Number")["Current Release Qty"].shift(1).fillna(0.0)
     )
+    weekly["Total Qty in Week"] = weekly["Current Release Qty"]
+    weekly["WoW Delta"] = weekly["Current Release Qty"] - weekly["Previous Week Qty"]
 
     def _format_release_change(row):
         previous_qty = float(row["Previous Release Qty"])
@@ -6096,7 +6062,122 @@ def build_weekly_by_part_report(detail_df, date_basis):
         return f"{percent_value:+.1f}%"
 
     weekly["Release Change %"] = weekly.apply(_format_release_change, axis=1)
+    weekly["WoW Change %"] = weekly.apply(
+        lambda row: format_weekly_change_label(row["Current Release Qty"], row["Previous Week Qty"]),
+        axis=1,
+    )
+    weekly["Trend / Status"] = weekly.apply(
+        lambda row: classify_weekly_change(row["Previous Week Qty"], row["Current Release Qty"]),
+        axis=1,
+    )
     return weekly[columns]
+
+
+def classify_weekly_change(previous_qty, current_qty):
+    previous = float(previous_qty or 0)
+    current = float(current_qty or 0)
+    if previous == 0 and current > 0:
+        return "New Demand"
+    if previous > 0 and current == 0:
+        return "Removed Demand"
+    if current > previous:
+        return "Increase"
+    if current < previous:
+        return "Decrease"
+    return "No Change"
+
+
+def format_weekly_change_label(current_qty, previous_qty):
+    previous = float(previous_qty or 0)
+    current = float(current_qty or 0)
+    if previous == 0:
+        return "New Demand" if current > 0 else "0.0%"
+    return f"{((current - previous) / previous) * 100:+.1f}%"
+
+
+def build_weekly_delta_map_report(weekly_by_part_df):
+    columns = [
+        "Part Number",
+        "Part Description",
+        "Previous Week",
+        "Current Week",
+        "Previous Week Qty",
+        "Current Week Qty",
+        "Weekly Delta",
+        "Weekly Change %",
+        "Trend / Status",
+    ]
+    if weekly_by_part_df is None or weekly_by_part_df.empty:
+        return pd.DataFrame(columns=columns)
+
+    week_order = (
+        weekly_by_part_df[["Week Label", "Week Start"]]
+        .drop_duplicates()
+        .sort_values("Week Start")
+        .reset_index(drop=True)
+    )
+    ordered_weeks = week_order["Week Label"].tolist()
+    if len(ordered_weeks) < 2:
+        return pd.DataFrame(columns=columns)
+
+    base_parts = weekly_by_part_df[["Part Number", "Part Description"]].drop_duplicates()
+    matrix = (
+        weekly_by_part_df.pivot_table(
+            index=["Part Number", "Part Description"],
+            columns="Week Label",
+            values="Current Release Qty",
+            aggfunc="sum",
+            fill_value=0,
+        )
+        .reindex(columns=ordered_weeks, fill_value=0)
+        .reset_index()
+    )
+    matrix = base_parts.merge(matrix, on=["Part Number", "Part Description"], how="left").fillna(0)
+
+    rows = []
+    for _, row in matrix.iterrows():
+        for index in range(1, len(ordered_weeks)):
+            previous_week = ordered_weeks[index - 1]
+            current_week = ordered_weeks[index]
+            previous_qty = float(row.get(previous_week, 0) or 0)
+            current_qty = float(row.get(current_week, 0) or 0)
+            rows.append(
+                {
+                    "Part Number": row["Part Number"],
+                    "Part Description": row["Part Description"],
+                    "Previous Week": previous_week,
+                    "Current Week": current_week,
+                    "Previous Week Qty": previous_qty,
+                    "Current Week Qty": current_qty,
+                    "Weekly Delta": current_qty - previous_qty,
+                    "Weekly Change %": format_weekly_change_label(current_qty, previous_qty),
+                    "Trend / Status": classify_weekly_change(previous_qty, current_qty),
+                }
+            )
+
+    report = pd.DataFrame(rows, columns=columns)
+    return report.sort_values(["Part Number", "Current Week"]).reset_index(drop=True)
+
+
+def build_weekly_delta_matrix_report(weekly_delta_map_df):
+    if weekly_delta_map_df is None or weekly_delta_map_df.empty:
+        return pd.DataFrame(columns=["Part Number", "Part Description"])
+
+    week_order = sorted(
+        weekly_delta_map_df["Current Week"].dropna().astype(str).unique().tolist()
+    )
+    matrix = (
+        weekly_delta_map_df.pivot_table(
+            index=["Part Number", "Part Description"],
+            columns="Current Week",
+            values="Weekly Delta",
+            aggfunc="sum",
+            fill_value=0,
+        )
+        .reindex(columns=week_order, fill_value=0)
+        .reset_index()
+    )
+    return matrix
 
 
 def build_weekly_by_part_chart_source(weekly_by_part_df):
@@ -6233,6 +6314,40 @@ def apply_number_formats(worksheet, header_row, format_map):
                 cell.number_format = number_format
 
 
+def decorate_trend_columns(worksheet, header_row=1):
+    headers = {cell.value: cell.column for cell in worksheet[header_row]}
+    delta_columns = [
+        headers.get(column_name)
+        for column_name in ("Release Delta", "Weekly Delta", "WoW Delta")
+        if headers.get(column_name) is not None
+    ]
+    status_column = headers.get("Trend / Status")
+    green_fill = PatternFill(fill_type="solid", fgColor="DCFCE7")
+    red_fill = PatternFill(fill_type="solid", fgColor="FEE2E2")
+    neutral_fill = PatternFill(fill_type="solid", fgColor="E2E8F0")
+    new_fill = PatternFill(fill_type="solid", fgColor="DBEAFE")
+
+    for row in range(header_row + 1, worksheet.max_row + 1):
+        row_fill = None
+        if status_column is not None:
+            status_value = str(worksheet.cell(row=row, column=status_column).value or "")
+            if status_value in {"Increase", "New Demand"}:
+                row_fill = green_fill if status_value == "Increase" else new_fill
+            elif status_value in {"Decrease", "Removed Demand"}:
+                row_fill = red_fill
+            elif status_value == "No Change":
+                row_fill = neutral_fill
+            if row_fill is not None:
+                worksheet.cell(row=row, column=status_column).fill = row_fill
+
+        for column_index in delta_columns:
+            cell = worksheet.cell(row=row, column=column_index)
+            if not isinstance(cell.value, (int, float)):
+                continue
+            cell.fill = green_fill if cell.value > 0 else red_fill if cell.value < 0 else neutral_fill
+            cell.font = Font(color="000000", bold=False)
+
+
 def style_multi_label_matrix_sheet(worksheet, metric_name, header_row=1, start_col=3, label_columns=(1, 2)):
     label_fill = PatternFill(fill_type="solid", fgColor="E2E8F0")
     label_font = Font(color="0F172A", bold=True)
@@ -6271,65 +6386,7 @@ def style_multi_label_matrix_sheet(worksheet, metric_name, header_row=1, start_c
 
 
 def add_weekly_report_chart(worksheet, chart_source_df, start_row, start_col=12):
-    if chart_source_df is None or chart_source_df.empty:
-        return
-
-    helper_col = start_col
-    headers = ["Week Label", "Previous Release Qty", "Current Release Qty", "Release Delta"]
-    for offset, header in enumerate(headers):
-        worksheet.cell(row=2, column=helper_col + offset, value=header)
-    for index, row in enumerate(chart_source_df.itertuples(index=False), start=3):
-        worksheet.cell(row=index, column=helper_col, value=row[0])
-        worksheet.cell(row=index, column=helper_col + 1, value=float(row[2]))
-        worksheet.cell(row=index, column=helper_col + 2, value=float(row[3]))
-        worksheet.cell(row=index, column=helper_col + 3, value=float(row[4]))
-
-    bar_chart = BarChart()
-    bar_chart.type = "col"
-    bar_chart.style = 10
-    bar_chart.title = "Weekly Release Trend"
-    bar_chart.y_axis.title = "Qty"
-    bar_chart.x_axis.title = "Week"
-    bar_chart.height = 8.5
-    bar_chart.width = 18
-    bar_chart.gapWidth = 55
-    data = Reference(
-        worksheet,
-        min_col=helper_col + 1,
-        max_col=helper_col + 2,
-        min_row=2,
-        max_row=2 + len(chart_source_df),
-    )
-    categories = Reference(
-        worksheet,
-        min_col=helper_col,
-        min_row=3,
-        max_row=2 + len(chart_source_df),
-    )
-    bar_chart.add_data(data, titles_from_data=True)
-    bar_chart.set_categories(categories)
-
-    line_chart = LineChart()
-    line_chart.y_axis.title = "Delta"
-    line_chart.y_axis.axId = 200
-    line_chart.height = 8.5
-    line_chart.width = 18
-    delta_data = Reference(
-        worksheet,
-        min_col=helper_col + 3,
-        max_col=helper_col + 3,
-        min_row=2,
-        max_row=2 + len(chart_source_df),
-    )
-    line_chart.add_data(delta_data, titles_from_data=True)
-    line_chart.set_categories(categories)
-    line_chart.y_axis.crosses = "max"
-
-    bar_chart += line_chart
-    worksheet.add_chart(bar_chart, f"{get_column_letter(start_col)}{start_row}")
-
-    for col in range(helper_col, helper_col + len(headers)):
-        worksheet.column_dimensions[get_column_letter(col)].hidden = True
+    return
 
 
 def write_weekly_by_part_sheet(
@@ -6372,16 +6429,18 @@ def write_weekly_by_part_sheet(
         worksheet,
         table_start_row,
         {
+            "Total Qty in Week": '#,##0',
             "Previous Release Qty": '#,##0',
             "Current Release Qty": '#,##0',
             "Release Delta": '+#,##0;-#,##0;0',
             "Previous Week Qty": '#,##0',
+            "WoW Delta": '+#,##0;-#,##0;0',
         },
     )
+    decorate_trend_columns(worksheet, header_row=table_start_row)
     autosize_worksheet(worksheet)
     ensure_numeric_cells_black(worksheet, start_row=table_start_row + 1)
     worksheet.freeze_panes = f"A{table_start_row + 1}"
-    add_weekly_report_chart(worksheet, chart_source_df, start_row=3, start_col=10)
 
 
 def write_qty_matrix_sheet(
@@ -6438,6 +6497,64 @@ def write_qty_matrix_sheet(
     worksheet.freeze_panes = f"C{matrix_start_row + 1}"
 
 
+def write_weekly_delta_map_sheet(worksheet, weekly_delta_map_df, curr_meta, date_basis, selected_start_date, selected_end_date):
+    worksheet.merge_cells("A1:I1")
+    worksheet["A1"] = "Weekly Delta Map"
+    worksheet["A1"].font = Font(size=16, bold=True, color="0F172A")
+    worksheet["A1"].alignment = Alignment(horizontal="left", vertical="center")
+
+    parameter_items = [
+        ("Date Basis", get_date_label(date_basis)),
+        ("Selected Period", f"{selected_start_date:%Y-%m-%d} to {selected_end_date:%Y-%m-%d}"),
+        ("PO Number", curr_meta.get("po_number", "n/a")),
+        ("Planner", curr_meta.get("planner_name", "n/a")),
+        ("Logic", "Current week quantity vs previous week quantity by Part Number"),
+    ]
+    write_parameter_section(worksheet, 3, "Parameters", parameter_items, start_col=1)
+
+    worksheet["A10"] = "Week over Week Detail"
+    worksheet["A10"].font = Font(size=13, bold=True, color="0F172A")
+    table_start_row = 11
+    write_dataframe_block(worksheet, weekly_delta_map_df, table_start_row, start_col=1)
+    style_excel_header(worksheet, table_start_row)
+    style_table_region(worksheet, table_start_row, start_row=table_start_row + 1)
+    apply_number_formats(
+        worksheet,
+        table_start_row,
+        {
+            "Previous Week Qty": '#,##0',
+            "Current Week Qty": '#,##0',
+            "Weekly Delta": '+#,##0;-#,##0;0',
+        },
+    )
+    decorate_trend_columns(worksheet, header_row=table_start_row)
+    autosize_worksheet(worksheet)
+    ensure_numeric_cells_black(worksheet, start_row=table_start_row + 1)
+    worksheet.freeze_panes = f"A{table_start_row + 1}"
+
+
+def write_weekly_delta_matrix_sheet(worksheet, weekly_delta_matrix_df, curr_meta, date_basis, selected_start_date, selected_end_date):
+    worksheet.merge_cells("A1:G1")
+    worksheet["A1"] = "Weekly Delta Matrix"
+    worksheet["A1"].font = Font(size=16, bold=True, color="0F172A")
+    worksheet["A1"].alignment = Alignment(horizontal="left", vertical="center")
+
+    parameter_items = [
+        ("Date Basis", get_date_label(date_basis)),
+        ("Selected Period", f"{selected_start_date:%Y-%m-%d} to {selected_end_date:%Y-%m-%d}"),
+        ("PO Number", curr_meta.get("po_number", "n/a")),
+    ]
+    write_parameter_section(worksheet, 3, "Parameters", parameter_items, start_col=1)
+
+    table_start_row = 9
+    write_dataframe_block(worksheet, weekly_delta_matrix_df, table_start_row, start_col=1)
+    style_excel_header(worksheet, table_start_row)
+    style_multi_label_matrix_sheet(worksheet, "Delta", header_row=table_start_row, start_col=3, label_columns=(1, 2))
+    autosize_worksheet(worksheet)
+    ensure_numeric_cells_black(worksheet, start_row=table_start_row + 1)
+    worksheet.freeze_panes = f"C{table_start_row + 1}"
+
+
 def to_professional_weekly_report_bytes(
     detail_df,
     prev_meta,
@@ -6447,19 +6564,22 @@ def to_professional_weekly_report_bytes(
     selected_end_date,
 ):
     weekly_by_part_df = build_weekly_by_part_report(detail_df, date_basis)
-    chart_source_df = build_weekly_by_part_chart_source(weekly_by_part_df)
     qty_matrix_df, weekly_totals_df = build_qty_matrix_report(weekly_by_part_df)
+    weekly_delta_map_df = build_weekly_delta_map_report(weekly_by_part_df)
+    weekly_delta_matrix_df = build_weekly_delta_matrix_report(weekly_delta_map_df)
 
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         pd.DataFrame().to_excel(writer, sheet_name="Weekly by Part", index=False)
-        pd.DataFrame().to_excel(writer, sheet_name="Qty Matrix", index=False)
+        pd.DataFrame().to_excel(writer, sheet_name="Weekly Qty Matrix", index=False)
+        pd.DataFrame().to_excel(writer, sheet_name="Weekly Delta Map", index=False)
+        pd.DataFrame().to_excel(writer, sheet_name="Weekly Delta Matrix", index=False)
 
         weekly_sheet = writer.book["Weekly by Part"]
         write_weekly_by_part_sheet(
             weekly_sheet,
             weekly_by_part_df,
-            chart_source_df,
+            pd.DataFrame(),
             prev_meta,
             curr_meta,
             date_basis,
@@ -6467,11 +6587,31 @@ def to_professional_weekly_report_bytes(
             selected_end_date,
         )
 
-        qty_matrix_sheet = writer.book["Qty Matrix"]
+        qty_matrix_sheet = writer.book["Weekly Qty Matrix"]
         write_qty_matrix_sheet(
             qty_matrix_sheet,
             qty_matrix_df,
             weekly_totals_df,
+            curr_meta,
+            date_basis,
+            selected_start_date,
+            selected_end_date,
+        )
+
+        weekly_delta_sheet = writer.book["Weekly Delta Map"]
+        write_weekly_delta_map_sheet(
+            weekly_delta_sheet,
+            weekly_delta_map_df,
+            curr_meta,
+            date_basis,
+            selected_start_date,
+            selected_end_date,
+        )
+
+        weekly_delta_matrix_sheet = writer.book["Weekly Delta Matrix"]
+        write_weekly_delta_matrix_sheet(
+            weekly_delta_matrix_sheet,
+            weekly_delta_matrix_df,
             curr_meta,
             date_basis,
             selected_start_date,
@@ -6742,118 +6882,15 @@ def build_calendar_weekly_export(calendar_export):
 
 
 def add_weekly_comparison_chart(worksheet, header_row=1, anchor_cell="M2"):
-    headers = {cell.value: cell.column for cell in worksheet[header_row]}
-    week_column = headers.get("Week Label")
-    previous_column = headers.get("Previous Release Qty")
-    current_column = headers.get("Current Release Qty")
-    if week_column is None or previous_column is None or current_column is None or worksheet.max_row <= header_row:
-        return
-
-    chart = LineChart()
-    chart.title = "Weekly quantity comparison"
-    chart.y_axis.title = "Qty"
-    chart.x_axis.title = "Week"
-    chart.height = 8.5
-    chart.width = 18
-    data = Reference(
-        worksheet,
-        min_col=previous_column,
-        max_col=current_column,
-        min_row=header_row,
-        max_row=worksheet.max_row,
-    )
-    categories = Reference(
-        worksheet,
-        min_col=week_column,
-        min_row=header_row + 1,
-        max_row=worksheet.max_row,
-    )
-    chart.add_data(data, titles_from_data=True)
-    chart.set_categories(categories)
-    worksheet.add_chart(chart, anchor_cell)
+    return
 
 
 def add_totals_chart(worksheet, totals_df, *, value_label, title, anchor_cell="L2"):
-    if totals_df is None or totals_df.empty:
-        return
-
-    helper_col = worksheet.max_column + 3
-    worksheet.cell(row=2, column=helper_col, value="Date")
-    worksheet.cell(row=2, column=helper_col + 1, value=value_label)
-    for index, row in enumerate(totals_df.itertuples(index=False), start=3):
-        worksheet.cell(row=index, column=helper_col, value=row[0])
-        worksheet.cell(row=index, column=helper_col + 1, value=float(row[1]))
-
-    chart = BarChart()
-    chart.type = "col"
-    chart.style = 10
-    chart.title = title
-    chart.y_axis.title = value_label
-    chart.x_axis.title = "Date"
-    chart.height = 8.5
-    chart.width = 18
-    data = Reference(
-        worksheet,
-        min_col=helper_col + 1,
-        max_col=helper_col + 1,
-        min_row=2,
-        max_row=2 + len(totals_df),
-    )
-    categories = Reference(
-        worksheet,
-        min_col=helper_col,
-        min_row=3,
-        max_row=2 + len(totals_df),
-    )
-    chart.add_data(data, titles_from_data=True)
-    chart.set_categories(categories)
-    worksheet.add_chart(chart, anchor_cell)
-
-    worksheet.column_dimensions[get_column_letter(helper_col)].hidden = True
-    worksheet.column_dimensions[get_column_letter(helper_col + 1)].hidden = True
+    return
 
 
 def add_calendar_summary_chart(worksheet, calendar_weekly_df, anchor_cell="L2"):
-    if calendar_weekly_df is None or calendar_weekly_df.empty:
-        return
-
-    helper_col = worksheet.max_column + 3
-    headers = ["ISO Week Label", "Working Days PL", "Saturdays", "Polish Holidays"]
-    for offset, header in enumerate(headers):
-        worksheet.cell(row=2, column=helper_col + offset, value=header)
-    for index, row in enumerate(calendar_weekly_df.itertuples(index=False), start=3):
-        worksheet.cell(row=index, column=helper_col, value=row[0])
-        worksheet.cell(row=index, column=helper_col + 1, value=int(row[3]))
-        worksheet.cell(row=index, column=helper_col + 2, value=int(row[4]))
-        worksheet.cell(row=index, column=helper_col + 3, value=int(row[6]))
-
-    chart = BarChart()
-    chart.type = "col"
-    chart.style = 10
-    chart.title = "Operational calendar summary"
-    chart.y_axis.title = "Days"
-    chart.x_axis.title = "ISO Week"
-    chart.height = 8.5
-    chart.width = 18
-    data = Reference(
-        worksheet,
-        min_col=helper_col + 1,
-        max_col=helper_col + 3,
-        min_row=2,
-        max_row=2 + len(calendar_weekly_df),
-    )
-    categories = Reference(
-        worksheet,
-        min_col=helper_col,
-        min_row=3,
-        max_row=2 + len(calendar_weekly_df),
-    )
-    chart.add_data(data, titles_from_data=True)
-    chart.set_categories(categories)
-    worksheet.add_chart(chart, anchor_cell)
-
-    for offset in range(len(headers)):
-        worksheet.column_dimensions[get_column_letter(helper_col + offset)].hidden = True
+    return
 
 
 def to_excel_bytes(
@@ -6872,14 +6909,17 @@ def to_excel_bytes(
     output = io.BytesIO()
     weekly_export = build_weekly_comparison_export(weekly_summary)
     calendar_export = build_calendar_operational_export(selected_start_date, selected_end_date)
-    calendar_weekly_export = build_calendar_weekly_export(calendar_export)
     current_matrix_export = build_report_matrix_export(current_matrix_df)
     delta_matrix_export = build_report_matrix_export(delta_matrix_df)
-    current_totals_export = build_matrix_totals_export(current_matrix_export, "Current Release Qty")
-    delta_totals_export = build_matrix_totals_export(delta_matrix_export, "Release Delta")
+    weekly_by_part_export = build_weekly_by_part_report(detail_df, date_basis)
+    weekly_delta_map_export = build_weekly_delta_map_report(weekly_by_part_export)
+    weekly_delta_matrix_export = build_weekly_delta_matrix_report(weekly_delta_map_export)
 
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         weekly_export.to_excel(writer, sheet_name="Weekly Comparison", index=False)
+        weekly_by_part_export.to_excel(writer, sheet_name="Weekly by Part", index=False)
+        weekly_delta_map_export.to_excel(writer, sheet_name="Weekly Delta Map", index=False)
+        weekly_delta_matrix_export.to_excel(writer, sheet_name="Weekly Delta Matrix", index=False)
         calendar_export.to_excel(writer, sheet_name="Calendar PL", index=False)
         current_matrix_export.to_excel(writer, sheet_name="Current Matrix", index=False)
         delta_matrix_export.to_excel(writer, sheet_name="Delta Heatmap", index=False)
@@ -6902,7 +6942,53 @@ def to_excel_bytes(
         weekly_sheet.auto_filter.ref = weekly_sheet.dimensions
         autosize_worksheet(weekly_sheet)
         ensure_numeric_cells_black(weekly_sheet, start_row=2)
-        add_weekly_comparison_chart(weekly_sheet)
+
+        weekly_by_part_sheet = writer.book["Weekly by Part"]
+        style_excel_header(weekly_by_part_sheet, 1)
+        style_table_region(weekly_by_part_sheet, 1)
+        apply_number_formats(
+            weekly_by_part_sheet,
+            1,
+            {
+                "Total Qty in Week": '#,##0',
+                "Previous Release Qty": '#,##0',
+                "Current Release Qty": '#,##0',
+                "Release Delta": '+#,##0;-#,##0;0',
+                "Previous Week Qty": '#,##0',
+                "WoW Delta": '+#,##0;-#,##0;0',
+            },
+        )
+        decorate_trend_columns(weekly_by_part_sheet, header_row=1)
+        weekly_by_part_sheet.freeze_panes = "A2"
+        weekly_by_part_sheet.auto_filter.ref = weekly_by_part_sheet.dimensions
+        autosize_worksheet(weekly_by_part_sheet)
+        ensure_numeric_cells_black(weekly_by_part_sheet, start_row=2)
+
+        weekly_delta_sheet = writer.book["Weekly Delta Map"]
+        style_excel_header(weekly_delta_sheet, 1)
+        style_table_region(weekly_delta_sheet, 1)
+        apply_number_formats(
+            weekly_delta_sheet,
+            1,
+            {
+                "Previous Week Qty": '#,##0',
+                "Current Week Qty": '#,##0',
+                "Weekly Delta": '+#,##0;-#,##0;0',
+            },
+        )
+        decorate_trend_columns(weekly_delta_sheet, header_row=1)
+        weekly_delta_sheet.freeze_panes = "A2"
+        weekly_delta_sheet.auto_filter.ref = weekly_delta_sheet.dimensions
+        autosize_worksheet(weekly_delta_sheet)
+        ensure_numeric_cells_black(weekly_delta_sheet, start_row=2)
+
+        weekly_delta_matrix_sheet = writer.book["Weekly Delta Matrix"]
+        style_excel_header(weekly_delta_matrix_sheet, 1)
+        weekly_delta_matrix_sheet.freeze_panes = "C2"
+        weekly_delta_matrix_sheet.auto_filter.ref = weekly_delta_matrix_sheet.dimensions
+        autosize_worksheet(weekly_delta_matrix_sheet)
+        style_multi_label_matrix_sheet(weekly_delta_matrix_sheet, "Delta", header_row=1, start_col=3, label_columns=(1, 2))
+        ensure_numeric_cells_black(weekly_delta_matrix_sheet, start_row=2)
 
         calendar_sheet = writer.book["Calendar PL"]
         style_excel_header(calendar_sheet, 1)
@@ -6913,7 +6999,6 @@ def to_excel_bytes(
         calendar_sheet.auto_filter.ref = calendar_sheet.dimensions
         autosize_worksheet(calendar_sheet)
         ensure_numeric_cells_black(calendar_sheet, start_row=2)
-        add_calendar_summary_chart(calendar_sheet, calendar_weekly_export)
 
         current_matrix_sheet = writer.book["Current Matrix"]
         style_excel_header(current_matrix_sheet, 1)
@@ -6922,12 +7007,6 @@ def to_excel_bytes(
         autosize_worksheet(current_matrix_sheet)
         style_multi_label_matrix_sheet(current_matrix_sheet, "Current Quantity", header_row=1, start_col=3, label_columns=(1, 2))
         ensure_numeric_cells_black(current_matrix_sheet, start_row=2)
-        add_totals_chart(
-            current_matrix_sheet,
-            current_totals_export,
-            value_label="Current Release Qty",
-            title="Current quantity by date",
-        )
 
         delta_heatmap_sheet = writer.book["Delta Heatmap"]
         style_excel_header(delta_heatmap_sheet, 1)
@@ -6936,12 +7015,6 @@ def to_excel_bytes(
         autosize_worksheet(delta_heatmap_sheet)
         style_multi_label_matrix_sheet(delta_heatmap_sheet, "Delta", header_row=1, start_col=3, label_columns=(1, 2))
         ensure_numeric_cells_black(delta_heatmap_sheet, start_row=2)
-        add_totals_chart(
-            delta_heatmap_sheet,
-            delta_totals_export,
-            value_label="Release Delta",
-            title="Delta by date",
-        )
 
     return output.getvalue()
 

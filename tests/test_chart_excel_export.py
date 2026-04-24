@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pandas as pd
 from openpyxl import load_workbook
-from openpyxl.chart import BarChart, LineChart, Reference
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from types import SimpleNamespace
@@ -23,7 +22,6 @@ def load_chart_export_functions() -> dict[str, object]:
         "build_matrix_chart_export_table",
         "prepare_chart_export_plot_table",
         "add_excel_chart_export_data",
-        "build_excel_native_chart",
         "build_chart_export_metadata",
         "write_chart_export_metadata",
         "build_excel_chart_workbook",
@@ -40,12 +38,9 @@ def load_chart_export_functions() -> dict[str, object]:
         "io": io,
         "pd": pd,
         "Alignment": Alignment,
-        "BarChart": BarChart,
         "Border": Border,
         "Font": Font,
-        "LineChart": LineChart,
         "PatternFill": PatternFill,
-        "Reference": Reference,
         "Side": Side,
         "st": SimpleNamespace(cache_data=lambda **kwargs: (lambda func: func)),
         "get_column_letter": get_column_letter,
@@ -59,7 +54,7 @@ class ChartExcelExportTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.export_functions = load_chart_export_functions()
 
-    def test_build_excel_chart_workbook_creates_native_line_chart(self) -> None:
+    def test_build_excel_chart_workbook_exports_chart_data_without_excel_chart(self) -> None:
         date_summary = pd.DataFrame(
             [
                 {
@@ -96,10 +91,12 @@ class ChartExcelExportTests(unittest.TestCase):
 
         workbook = load_workbook(io.BytesIO(workbook_bytes))
         self.assertIn("Data", workbook.sheetnames)
-        self.assertIn("Chart", workbook.sheetnames)
-        chart_sheet = workbook["Chart"]
-        self.assertEqual(chart_sheet["A1"].value, "Dashboard - Release trend")
-        self.assertGreaterEqual(len(chart_sheet._charts), 1)
+        self.assertIn("Chart Data", workbook.sheetnames)
+        self.assertIn("Metadata", workbook.sheetnames)
+        metadata_sheet = workbook["Metadata"]
+        self.assertEqual(metadata_sheet["A1"].value, "Dashboard - Release trend")
+        for worksheet in workbook.worksheets:
+            self.assertEqual(len(worksheet._charts), 0, worksheet.title)
 
     def test_build_matrix_chart_export_table_sums_date_columns(self) -> None:
         matrix_df = pd.DataFrame(
