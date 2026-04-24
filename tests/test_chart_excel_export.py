@@ -10,6 +10,7 @@ from openpyxl import load_workbook
 from openpyxl.chart import BarChart, LineChart, Reference
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from types import SimpleNamespace
 
 
 def load_chart_export_functions() -> dict[str, object]:
@@ -46,6 +47,7 @@ def load_chart_export_functions() -> dict[str, object]:
         "PatternFill": PatternFill,
         "Reference": Reference,
         "Side": Side,
+        "st": SimpleNamespace(cache_data=lambda **kwargs: (lambda func: func)),
         "get_column_letter": get_column_letter,
     }
     exec(compile(module, filename=str(source_path), mode="exec"), namespace)

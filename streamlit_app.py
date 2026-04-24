@@ -2064,9 +2064,18 @@ def render_chart_table_switch(
     export_dataset = (
         get_chart_export_dataset(key, source_df, export_state) if chart_export_config else pd.DataFrame()
     )
-    export_bytes = (
-        build_excel_chart_workbook(key, export_dataset, export_state) if chart_export_config else None
+    export_build_state = (
+        {config_key: config_value for config_key, config_value in export_state.items() if config_key != "dataset"}
+        if chart_export_config
+        else {}
     )
+    export_bytes = None
+    if chart_export_config:
+        try:
+            export_bytes = build_excel_chart_workbook(key, export_dataset, export_build_state)
+        except Exception as exc:
+            export_bytes = None
+            st.session_state["debug_status"] = f"Chart export disabled for {key}: {exc}"
 
     state_key = f"{key}_view_mode"
     st.session_state.setdefault(state_key, "chart")
@@ -2324,6 +2333,7 @@ def write_chart_export_metadata(worksheet, metadata_rows, title):
     worksheet.column_dimensions["B"].width = 88
 
 
+@st.cache_data(show_spinner=False)
 def build_excel_chart_workbook(chart_id, filtered_data, state):
     chart_dataset = get_chart_export_dataset(chart_id, filtered_data, state)
     if chart_dataset is None or chart_dataset.empty:
@@ -6332,7 +6342,6 @@ def write_weekly_by_part_sheet(
     selected_start_date,
     selected_end_date,
 ):
-    insert_logo(worksheet, "J1")
     worksheet.merge_cells("A1:H1")
     worksheet["A1"] = "Weekly by Part Report"
     worksheet["A1"].font = Font(size=16, bold=True, color="0F172A")
@@ -6384,7 +6393,6 @@ def write_qty_matrix_sheet(
     selected_start_date,
     selected_end_date,
 ):
-    insert_logo(worksheet, "I1")
     worksheet.merge_cells("A1:G1")
     worksheet["A1"] = "Qty Matrix"
     worksheet["A1"].font = Font(size=16, bold=True, color="0F172A")
@@ -6485,7 +6493,6 @@ def write_summary_sheet(
     selected_end_date,
     key_findings,
 ):
-    insert_logo(worksheet, "G1")
     worksheet.merge_cells("A1:F1")
     worksheet["A1"] = BRAND_NAME
     worksheet["A1"].font = Font(size=14, bold=True, color="FFFFFF")

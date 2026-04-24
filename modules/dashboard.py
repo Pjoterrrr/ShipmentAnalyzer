@@ -82,6 +82,9 @@ def render(data, ui):
         f"Release trend wedlug osi: {ui.get_date_label(date_basis)}",
         "Porownanie poprzedniego i aktualnego release'u z interaktywnym drill-down do danych.",
     )
+    change_mix_source = ui.build_change_mix_source(filtered_df)
+    increase_source = ui.build_product_bar_source(product_summary, "increase")
+    decrease_source = ui.build_product_bar_source(product_summary, "decrease")
     ui.render_chart_table_switch(
         "dashboard_trend",
         ui.build_quantity_chart(date_summary, ui.get_date_label(date_basis)),
@@ -129,11 +132,11 @@ def render(data, ui):
         ui.render_chart_table_switch(
             "dashboard_mix",
             ui.build_change_mix_chart(filtered_df),
-            ui.build_change_mix_source(filtered_df),
+            change_mix_source,
             table_height=240,
             chart_export_config={
                 "title": "Dashboard - Change mix",
-                "dataset": ui.build_change_mix_source(filtered_df),
+                "dataset": change_mix_source,
                 "chart_type": "bar",
                 "category_column": "Direction Label",
                 "series_columns": ["Rows"],
@@ -211,11 +214,11 @@ def render(data, ui):
             ui.render_chart_table_switch(
                 "dashboard_increase",
                 increase_chart,
-                ui.build_product_bar_source(product_summary, "increase"),
+                increase_source,
                 table_height=340,
                 chart_export_config={
                     "title": "Dashboard - Top product increases",
-                    "dataset": ui.build_product_bar_source(product_summary, "increase"),
+                    "dataset": increase_source,
                     "chart_type": "bar",
                     "category_column": "Part Number",
                     "series_columns": ["Delta"],
@@ -232,11 +235,11 @@ def render(data, ui):
             ui.render_chart_table_switch(
                 "dashboard_decrease",
                 decrease_chart,
-                ui.build_product_bar_source(product_summary, "decrease"),
+                decrease_source,
                 table_height=340,
                 chart_export_config={
                     "title": "Dashboard - Top product declines",
-                    "dataset": ui.build_product_bar_source(product_summary, "decrease"),
+                    "dataset": decrease_source,
                     "chart_type": "bar",
                     "category_column": "Part Number",
                     "series_columns": ["Delta"],

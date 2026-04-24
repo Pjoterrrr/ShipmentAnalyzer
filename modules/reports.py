@@ -245,12 +245,15 @@ def _build_matrix_heatmap(matrix_report, metric_name):
         return None
 
     chart_source = matrix_report.copy()
+    if len(value_columns) > 16:
+        value_columns = value_columns[-16:]
+        chart_source = chart_source[["Part Number", "Part Description", *value_columns]].copy()
     chart_source["Label"] = chart_source.apply(
         lambda row: _part_label(row["Part Number"], str(row["Part Description"])[:36]),
         axis=1,
     )
     chart_source["Magnitude"] = chart_source[value_columns].abs().sum(axis=1)
-    chart_source = chart_source.sort_values("Magnitude", ascending=False).head(25)
+    chart_source = chart_source.sort_values("Magnitude", ascending=False).head(18)
     color_scale = "RdBu" if metric_name == "Delta" else "Blues"
     z_mid = 0 if metric_name == "Delta" else None
 
